@@ -4,9 +4,10 @@ from RRE_test1 import RRE_test1
 
 
 class RRETestProblem(object):
-	def __init__(self, dt, dz, T, Z, noise, name):
+	def __init__(self, dt, dz, T, Z, noise, name, tag):
 		self.name = name
 		self.noise = noise
+		self.tag = tag
 		if self.name == 'Test1':
 			self.env = RRE_test1(dt, dz, T, Z)
 		self.define_folder_names()
@@ -37,7 +38,7 @@ class RRETestProblem(object):
 
 	def define_folder_names(self):
 		self.EnvFolder = './RRE_'+self.name+'_checkpoints'
-		self.DataFolder = self.EnvFolder+"/Nt{0}_Nz{1}_noise{2}".format(self.env.Nt,self.env.Nz,self.noise)
+		self.DataFolder = self.EnvFolder+"/Nt{0}_Nz{1}_noise{2}{3}".format(self.env.Nt,self.env.Nz,self.noise,self.tag)
 		self.TrainDataName = self.DataFolder+'/training_data.npz'
 		self.TestDataName = self.DataFolder+'/testing_data.npz'
 
