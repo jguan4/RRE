@@ -12,6 +12,8 @@ import scipy.optimize as sopt
 import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 tf.random.set_seed(5)
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt 
 from mpl_toolkits.mplot3d import Axes3D
 from RRETestProblem import RRETestProblem
