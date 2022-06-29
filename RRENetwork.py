@@ -99,7 +99,7 @@ class RRENetwork(object):
 	# 	return l
 
 	def loss(self, theta_data, residual_data, boundary_data, log = False):
-		loss = self.loss_theta(theta_data, log = log)*self.thetaweight+self.fweight*self.loss_residual(residual_data, log = log)+\
+		loss = self.loss_theta(theta_data, log = log)*self.thetaweight+1e5*self.fweight*self.loss_residual(residual_data, log = log)+\
 			self.BCweight*self.loss_boundary(boundary_data, log = log)
 		return loss
 
@@ -130,7 +130,7 @@ class RRENetwork(object):
 	def loss_boundary_data(self, bound):
 		psi_pred, K_pred, theta_pred, f_pred, flux_pred, [psiz_pred, psit_pred, thetat_pred, Kz_pred, psizz_pred] = self.rre_model(bound['z'], bound['t'])
 		if bound['type'] == 'flux':
-			loss = self.loss_reduce_mean(flux_pred, bound['data'])*self.fluxweight
+			loss = self.loss_reduce_mean(flux_pred, bound['data'])*self.fluxweight*1e3
 		elif bound['type'] == 'psiz':
 			loss = self.loss_reduce_mean(psiz_pred, bound['data'])
 		elif bound['type'] == 'psi':
@@ -189,7 +189,7 @@ class RRENetwork(object):
 		boundary_data['bottom'] = self.convert_bound_data(boundary_data['bottom'])
 	
 		# Optimizing
-		self.tf_optimization(theta_data, residual_data, boundary_data)
+		# self.tf_optimization(theta_data, residual_data, boundary_data)
 		self.sopt_optimization(theta_data, residual_data, boundary_data)
 
 	# def fit(self, z_tf, t_tf, theta, boundary_data):
@@ -497,131 +497,6 @@ class RRENetwork(object):
 		# self.save_multi_image(filename)
 		# plt.savefig('my_plot.png')
 
-class RRENetwork_flux(RRENetwork):
-	def __init__(self, psistruct, Kstruct, thetastruct, training_hp, pathname):
-		super(RRENetwork,self).__init__(psistruct, Kstruct, thetastruct, training_hp, pathname)
-		self.loss_log = [['Epoch'],['l_theta'],['l_f'],['l_top'],['l_bottom']] # theta, f, top bound, lower bound
-
-	def rre_model(self, z_tf, t_tf, flux_tf):
-
-		with tf.GradientTape(persistent=True) as tape:
-			# Watching the two inputs we’ll need later, x and t
-			tape.watch(z_tf)
-			tape.watch(t_tf)
-			tape.watch(flux_tf)
-
-			# Packing together the inputs
-			X_f = tf.squeeze(tf.stack([z_tf, t_tf, flux_tf],axis = 1))
-			if self.norm == '_norm':
-				X_f = 2*(X_f - self.lb)/(self.ub - self.lb) -1
-			elif self.norm == '_norm1':
-				X_f = (X_f - self.lb)/(self.ub - self.lb)
-
-			# Getting the prediction
-			psi = self.Psi.net(X_f)
-			log_h = tf.math.log(-psi)
-			theta = self.Theta.net(-log_h)
-			K = self.K.net(-log_h)
-			# Deriving INSIDE the tape (since we’ll need the x derivative of this later, u_xx)
-			psi_z = tape.gradient(psi, z_tf)
-			flux = -K*(psi_z+1)
-			psi_t = tape.gradient(psi, t_tf)
-
-			theta_t = tape.gradient(theta, t_tf)
-			K_z = tape.gradient(K,z_tf)
-
-		# Getting the other derivatives
-		psi_zz = tape.gradient(psi_z, z_tf)
-		flux_z = tape.gradient(flux, z_tf)
-		f_residual = theta_t + flux_z
-
-		# f_residual =  theta_t - K_z*psi_z- K*psi_zz - K_z
-
-		# flux = -K*(psi_z+1)
-
-		# return psi, K, theta, f_residual, flux, psi_z
-		return psi, K, theta, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz]
-
-	def loss(self, theta_pred, theta, f):
-		lf = self.loss_f(f)
-		ltheta = self.loss_reduce_mean(theta_pred,theta)
-		self.loss_log[1].append(ltheta.numpy())
-		self.loss_log[2].append(lf.numpy())
-		l = ltheta+lf*1e5
-			#+self.loss_flux(flux_pred, flux)\
-		return l
-
-	def grad(self, z_tf, t_tf, flux_tf, theta, boundary_data, flatten = False):
-		with tf.GradientTape() as tape:
-			_, _, theta_pred, f, _, _ = self.rre_model(z_tf, t_tf, flux_tf)
-			loss = self.loss(theta_pred, theta, f)
-			loss_boundary = self.loss_boundary(boundary_data)
-			loss_value = loss+loss_boundary*self.BCweight
-		grads = tape.gradient(loss_value, self.wrap_trainable_variables())
-		return loss_value, grads
-
-	def get_loss_and_flat_grad(self, z_tf, t_tf, flux_tf, theta, boundary_data):
-		def loss_and_flat_grad(w, log = False):
-			with tf.GradientTape() as tape:
-				self.set_weights(w)
-				_, _, theta_pred, f, _, _ = self.rre_model(z_tf, t_tf, flux_tf)
-				loss = self.loss(theta_pred, theta, f)
-				loss_boundary = self.loss_boundary(boundary_data)
-				loss_value = loss+loss_boundary*self.BCweight
-			grad = tape.gradient(loss_value, self.wrap_trainable_variables())
-			grad_flat = []
-			for g in grad:
-				grad_flat.append(tf.reshape(g, [-1]))
-			grad_flat = tf.concat(grad_flat, 0)
-			return loss_value, grad_flat.numpy()
-		return loss_and_flat_grad	
-
-	def fit(self, z_tf, t_tf, theta, boundary_data):
-		# self.logger.log_train_start(self)
-
-		# Creating the tensors
-		z_tf = self.convert_tensor(z_tf)
-		t_tf = self.convert_tensor(t_tf)
-		theta = self.convert_tensor(theta)
-
-		boundary_data['top'] = self.convert_bound_data(boundary_data['top'])
-		boundary_data['bottom'] = self.convert_bound_data(boundary_data['bottom'])
-	
-		# Optimizing
-		self.tf_optimization(z_tf, t_tf, theta, boundary_data)
-		self.sopt_optimization(z_tf, t_tf, theta, boundary_data)
-
-		# self.logger.log_train_end(self.tf_epochs + self.nt_config.maxIter)
-
-	def tf_optimization(self, z_tf, t_tf, theta, boundary_data):
-		for epoch in range(self.tf_epochs):
-			loss_value = self.tf_optimization_step(z_tf, t_tf, theta, boundary_data)
-			self.loss_log[0].append(epoch)
-			print("Epoch {0}, loss value: {1}\n".format(epoch, loss_value))
-			if epoch %50 == 0 or epoch == self.tf_epochs:
-				# if epoch != 0:
-				self.save_model()
-				self.plotting(epoch)
-				self.save_loss()
-
-	def tf_optimization_step(self, z_tf, t_tf, theta, boundary_data):
-		loss_value, grads = self.grad(z_tf, t_tf, theta, boundary_data)
-		self.tf_optimizer.apply_gradients(
-					zip(grads, self.wrap_trainable_variables()))
-		return loss_value
-	
-	def sopt_optimization(self, z_tf, t_tf, theta, boundary_data):
-			x0 = self.get_weights()
-			loss_and_flat_grad = self.get_loss_and_flat_grad(z_tf, t_tf, theta, boundary_data)
-			self.Nfeval = 0
-			sopt.minimize(fun=loss_and_flat_grad, x0=x0, jac=True, method='L-BFGS-B', options = self.training_hp['lbfgs_options'], callback = self.sopt_callback)
-			self.save_model()
-			self.plotting('After LBFGS 1')
-	def predict(self, z_tf, t_tf):
-			z_tf = self.convert_tensor(z_tf)
-			t_tf = self.convert_tensor(t_tf)
-			psi, K, theta, _, _, _ = self.rre_model(z_tf, t_tf)
-			return psi.numpy(), K.numpy(), theta.numpy()
 
 class PsiNetwork(object):
 	def __init__(self,psistruct, pathname):
