@@ -15,6 +15,11 @@ def extract_data(t,z,theta, Nt = 251, Nz = 1001, Ns = 10, Ne = 200, Ni = 20):
 		train_data.append(Itemt)
 	return train_data
 
+def flux_function(t, toggle = 'Bandai1'):
+	if toggle = 'Bandai1':
+		pass
+
+
 def extract_top_boundary(t,z,vec, Nt = 251, Nz = 1001):
 	train_data = []
 	for item in [z,t,vec]:
@@ -63,7 +68,7 @@ def psi_func(theta):
 
 def load_data(training_hp, csv_file = None):
 	if csv_file is not None:
-		EnvFolder = './RRE_Bandai_100domain_checkpoints'
+		EnvFolder = './RRE_Bandai_100domain_linear_weight_checkpoints'
 		# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
 		Nt = int(training_hp['T']/training_hp['dt'])
 		Nz = int(training_hp['Z']/training_hp['dz'])+1
@@ -243,7 +248,8 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 		plt.show()
 
 
-train_toggle = 'retrain'
+train_toggle = 'train'
+starting_epoch = 0
 name = 'Test1'
 # csv_file = None 
 csv_file = "sandy_loam_nod.csv" 
@@ -260,9 +266,11 @@ Kstruct = {'layers':[1,40,40,40,1],'toggle':'MNN'}
 thetastruct = {'layers':[1,40,1],'toggle':'MNN'} 
 # data = np.genfromtxt(dataname+'.csv',delimiter=',')
 lbfgs_options={'disp': None, 'maxcor': 50, 'ftol': 2.220446049250313e-16, 'gtol': 1e-09, 'maxfun': 50000, 'maxiter': 50000, 'maxls': 50, 'iprint':1}
+adam_options = {'epoch':20000}
+total_epoch = lbfgs_options['maxiter'] + adam_options['epoch']
 # 'dz': 1, 'dt': 10,'Z':40, 'T':360
+training_hp = {'dz': 0.1, 'dt': 0.012,'Z':100, 'T':3, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm1', 'weights': [1e-3, 100, 1, 1e-5], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':linear}
 
-training_hp = {'dz': 0.1, 'dt': 0.012,'Z':100, 'T':3, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':{'epoch':60800}, 'norm':'_norm1', 'weights': [1e-3, 100, 1, 1e-3], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225}
 test_hp = {'name':'Test1', 'dz': 0.1, 'dt': .012,'Z':100, 'T':3, 'noise':0}
 
 main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggle, csv_file)

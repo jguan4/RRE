@@ -47,6 +47,10 @@ class RRENetwork(object):
 		self.loss_log = [['Epoch'],['l_theta'],['l_f'],['l_top'],['l_bottom']] # theta, f, top bound, lower bound
 		self.log_time = time.time()
 		self.wrap_variable_sizes()
+		self.starting_epoch = self.training_hp['starting_epoch']
+		self.epoch = self.starting_epoch
+		self.scheduleing_toggle = self.training_hp['scheduleing_toggle']
+		self.total_epoch = self.training_hp['total_epoch']
 
 	@tf.function
 	def rre_model(self, z_tf, t_tf):
@@ -98,9 +102,36 @@ class RRENetwork(object):
 	# 		#+self.loss_flux(flux_pred, flux)\
 	# 	return l
 
+	def weight_scheduling(self):
+		if self.scheduleing_toggle == 'constant':
+			return self.theta_weight, self.fweight, self.BCweight
+		elif self.scheduleing_toggle == 'linear':
+			thetaweight = self.thetaweight
+			BCweight = self.BCweight
+			fweight = self.linear_shedule(start_weight=self.fweight, end_weight = 1e3*self.fweight, duration = self.total_epoch/4*3)
+			return thetaweight,fweight,BCweight
+
+	def exp_increase(self,start_weight,end_weight,duration):
+		passed_epoch = self.epoch-self.starting_epoch
+		y = s*np.exp(np.log(end_weight/start_weight)/duration*passed_epoch)
+		return y
+
+	def linear_shedule(self, start_weight, end_weight, duration):
+		passed_epoch = self.epoch-self.starting_epoch
+		y = (end_weight-start_weight)/duration*passed_epoch+start_weight
+		return y
+
+	def weight_scheduling_flux(self):
+		if self.scheduleing_toggle == 'constant':
+			return self.fluxweight
+		elif self.scheduleing_toggle == 'linear':
+			fluxweight = self.linear_shedule(start_weight = self.fluxweight,end_weight = 1e3*self.fluxweight, duration= self.total_epoch/4*3)
+			return fluxweight
+
 	def loss(self, theta_data, residual_data, boundary_data, log = False):
-		loss = self.loss_theta(theta_data, log = log)*self.thetaweight+1e5*self.fweight*self.loss_residual(residual_data, log = log)+\
-			self.BCweight*self.loss_boundary(boundary_data, log = log)
+		thetaweight, fweight, BCweight = self.weight_scheduling()
+		loss = self.loss_theta(theta_data, log = log)*thetaweight+fweight*self.loss_residual(residual_data, log = log)+\
+			BCweight*self.loss_boundary(boundary_data, log = log)
 		return loss
 
 	def loss_theta(self, theta_data, log = False):
@@ -130,7 +161,8 @@ class RRENetwork(object):
 	def loss_boundary_data(self, bound):
 		psi_pred, K_pred, theta_pred, f_pred, flux_pred, [psiz_pred, psit_pred, thetat_pred, Kz_pred, psizz_pred] = self.rre_model(bound['z'], bound['t'])
 		if bound['type'] == 'flux':
-			loss = self.loss_reduce_mean(flux_pred, bound['data'])*self.fluxweight*1e3
+			fluxweight = self.weight_scheduling_flux()
+			loss = self.loss_reduce_mean(flux_pred, bound['data'])*fluxweight
 		elif bound['type'] == 'psiz':
 			loss = self.loss_reduce_mean(psiz_pred, bound['data'])
 		elif bound['type'] == 'psi':
@@ -189,7 +221,7 @@ class RRENetwork(object):
 		boundary_data['bottom'] = self.convert_bound_data(boundary_data['bottom'])
 	
 		# Optimizing
-		# self.tf_optimization(theta_data, residual_data, boundary_data)
+		self.tf_optimization(theta_data, residual_data, boundary_data)
 		self.sopt_optimization(theta_data, residual_data, boundary_data)
 
 	# def fit(self, z_tf, t_tf, theta, boundary_data):
@@ -212,12 +244,13 @@ class RRENetwork(object):
 	def tf_optimization(self, theta_data, residual_data, boundary_data):
 		for epoch in range(self.tf_epochs):
 			loss_value = self.tf_optimization_step(theta_data, residual_data, boundary_data)
-			self.loss_log[0].append(epoch)
+			self.loss_log[0].append(self.epoch)
 			print("Epoch {0}, loss value: {1}\n".format(epoch, loss_value))
+			self.epoch += 1 
 			if epoch %50 == 0 or epoch == self.tf_epochs:
 				# if epoch != 0:
 				self.save_model()
-				self.plotting(epoch)
+				self.plotting(self.epoch)
 				self.save_loss()
 
 	def tf_optimization_step(self, theta_data, residual_data, boundary_data):
@@ -249,16 +282,17 @@ class RRENetwork(object):
 		self.Nfeval = 0
 		sopt.minimize(fun=self.loss_and_flat_grad, x0=x0, jac=True, method='L-BFGS-B', options = self.training_hp['lbfgs_options'], callback = self.sopt_callback)
 		self.save_model()
-		self.plotting('After LBFGS 1')
+		self.plotting(self.epoch)
 
 	def sopt_callback(self,Xi):
-		self.loss_log[0].append(self.Nfeval)
+		self.loss_log[0].append(self.epoch)
 		self.loss_and_flat_grad(Xi, log = True)
 		if self.Nfeval %50 == 0:
 			self.save_model()
 			self.save_loss()
-			self.plotting(self.Nfeval+self.tf_epochs)
+			self.plotting(self.epoch)
 		self.Nfeval += 1
+		self.epoch += 1
 
 	def predict(self, z_tf, t_tf):
 		z_tf = self.convert_tensor(z_tf)

@@ -57,13 +57,14 @@ class RRENetwork_flux(RRENetwork):
 		psi_zz = tape.gradient(psi_z, z_tf)
 		flux_z = tape.gradient(flux, z_tf)
 		f_residual = theta_t + flux_z
+		flux_residual = flux-flux_tf
 
 		# f_residual =  theta_t - K_z*psi_z- K*psi_zz - K_z
 
 		# flux = -K*(psi_z+1)
 
 		# return psi, K, theta, f_residual, flux, psi_z
-		return psi, K, theta, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz]
+		return psi, K, theta, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual]
 
 
 	def loss_theta(self, theta_data, log = False):
@@ -91,9 +92,9 @@ class RRENetwork_flux(RRENetwork):
 		return top_loss+bottom_loss
 
 	def loss_boundary_data(self, bound):
-		psi_pred, K_pred, theta_pred, f_pred, flux_pred, [psiz_pred, psit_pred, thetat_pred, Kz_pred, psizz_pred] = self.rre_model(bound['z'], bound['t'], bound['flux'])
+		psi_pred, K_pred, theta_pred, f_pred, flux_pred, [psiz_pred, psit_pred, thetat_pred, Kz_pred, psizz_pred, flux_residual] = self.rre_model(bound['z'], bound['t'], bound['flux'])
 		if bound['type'] == 'flux':
-			loss = self.loss_reduce_mean(flux_pred, bound['data'])*self.fluxweight
+			loss = self.loss_f(flux_residual)*self.fluxweight
 		elif bound['type'] == 'psiz':
 			loss = self.loss_reduce_mean(psiz_pred, bound['data'])
 		elif bound['type'] == 'psi':
@@ -182,7 +183,7 @@ class RRENetwork_flux(RRENetwork):
 
 		array_data_temp = []
 
-		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz] = self.rre_model(self.convert_tensor(self.ztest_whole),self.convert_tensor(self.ttest_whole))
+		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = self.rre_model(self.convert_tensor(self.ztest_whole),self.convert_tensor(self.ttest_whole))
 		for item in [f_residual, psi_z, psi_t, theta_t, K_z, psi_zz]:
 			Item = np.reshape(item,[self.Nt,self.Nz])
 			array_data_temp.append(Item)
