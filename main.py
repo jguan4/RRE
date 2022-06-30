@@ -68,7 +68,7 @@ def psi_func(theta):
 
 def load_data(training_hp, csv_file = None):
 	if csv_file is not None:
-		EnvFolder = './RRE_Bandai_100domain_linear_weight_checkpoints'
+		EnvFolder = './RRE_Bandai_50domain_linear_weight_checkpoints'
 		# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
 		Nt = int(training_hp['T']/training_hp['dt'])
 		Nz = int(training_hp['Z']/training_hp['dz'])+1
@@ -95,10 +95,11 @@ def load_data(training_hp, csv_file = None):
 		theta = data['theta'].values[:,None]
 		flux = data['flux'].values[:,None]
 		zt, tt, thetat = extract_data(t,z,theta)
-		zf, tf, thetaf = extract_data(t,z,theta, Ne = 1001, Ni = 10)
+		zf, tf, thetaf = extract_data(t,z,theta, Ne = 500, Ni = 10)
+		
 		ztb, ttb, fluxtb = extract_top_boundary(t,z,flux)
-		zbb, tbb, psibb = extract_bottom_boundary(t,z,psi, Nb = -1)
-
+		zbb, tbb, psibb = extract_bottom_boundary(t,z,psi, Nb = 500)
+		
 		theta_data = {'z':zt, 't':tt, 'data':thetat}
 		residual_data = {'z':zf, 't':tf}
 		boundary_data = {'top':{'z':ztb, 't':ttb, 'data':fluxtb, 'type':'flux'}, 'bottom':{'z':zbb, 't':tbb, 'data':psibb, 'type':'psi'}}
@@ -255,7 +256,7 @@ name = 'Test1'
 csv_file = "sandy_loam_nod.csv" 
 if csv_file is not None:
 	# lb = [-20,0]
-	lb = [-100,0]
+	lb = [-50,0]
 	ub = [0,3]
 else:
 	if name == 'Test1':
@@ -266,10 +267,10 @@ Kstruct = {'layers':[1,40,40,40,1],'toggle':'MNN'}
 thetastruct = {'layers':[1,40,1],'toggle':'MNN'} 
 # data = np.genfromtxt(dataname+'.csv',delimiter=',')
 lbfgs_options={'disp': None, 'maxcor': 50, 'ftol': 2.220446049250313e-16, 'gtol': 1e-09, 'maxfun': 50000, 'maxiter': 50000, 'maxls': 50, 'iprint':1}
-adam_options = {'epoch':20000}
+adam_options = {'epoch':10000}
 total_epoch = lbfgs_options['maxiter'] + adam_options['epoch']
 # 'dz': 1, 'dt': 10,'Z':40, 'T':360
-training_hp = {'dz': 0.1, 'dt': 0.012,'Z':100, 'T':3, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm1', 'weights': [1e-3, 100, 1, 1e-5], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'linear'}
+training_hp = {'dz': 0.1, 'dt': 0.012,'Z':100, 'T':3, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm1', 'weights': [1e-1, 100, 100, 1e-5], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
 
 test_hp = {'name':'Test1', 'dz': 0.1, 'dt': .012,'Z':100, 'T':3, 'noise':0}
 

@@ -104,11 +104,11 @@ class RRENetwork(object):
 
 	def weight_scheduling(self):
 		if self.scheduleing_toggle == 'constant':
-			return self.theta_weight, self.fweight, self.BCweight
+			return self.thetaweight, self.fweight, self.BCweight
 		elif self.scheduleing_toggle == 'linear':
-			thetaweight = self.thetaweight
+			thetaweight = self.linear_shedule(start_weight=self.thetaweight, end_weight = 100*self.thetaweight, duration = self.total_epoch/4*3)
 			BCweight = self.BCweight
-			fweight = self.linear_shedule(start_weight=self.fweight, end_weight = 1e3*self.fweight, duration = self.total_epoch/4*3)
+			fweight = self.linear_shedule(start_weight=self.fweight, end_weight = 100*self.fweight, duration = self.total_epoch/4*3)
 			return thetaweight,fweight,BCweight
 
 	def exp_schedule(self,start_weight,end_weight,duration):
@@ -125,7 +125,7 @@ class RRENetwork(object):
 		if self.scheduleing_toggle == 'constant':
 			return self.fluxweight
 		elif self.scheduleing_toggle == 'linear':
-			fluxweight = self.linear_shedule(start_weight = self.fluxweight,end_weight = 1e3*self.fluxweight, duration= self.total_epoch/4*3)
+			fluxweight = self.linear_shedule(start_weight = self.fluxweight,end_weight = 100*self.fluxweight, duration= self.total_epoch/4*3)
 			return fluxweight
 
 	def loss(self, theta_data, residual_data, boundary_data, log = False):
@@ -404,9 +404,9 @@ class RRENetwork(object):
 					Item = np.reshape(item,[251,1001])
 					if T is None:
 					# Items = Item[int(T/0.012),0:200]
-						Items = Item[:,::20]
+						Items = Item[:,:501:20]
 					else:
-						Items = Item[int(T/0.012),::20]
+						Items = Item[int(T/0.012),:501:20]
 					Itemt = np.reshape(Items,[np.prod(Items.shape),1])
 					test_data.append(Itemt)
 				self.ztest_whole, self.ttest_whole, self.thetatest_whole, self.Ktest_whole, self.psitest_whole = test_data
@@ -416,14 +416,14 @@ class RRENetwork(object):
 					Item = np.reshape(item,[251,1001])
 					if T is None:
 					# Items = Item[int(T/0.012),0:200]
-						Items = Item[:,::20]
+						Items = Item[:,:500:20]
 					else:
-						Items = Item[int(T/0.012),::20]
+						Items = Item[int(T/0.012),:500:20]
 					Itemt = np.reshape(Items,[np.prod(Items.shape),1])
 					test_data.append(Itemt)
 				self.ztest, self.ttest, self.thetatest, self.Ktest, self.psitest = test_data
 				self.Nt = 251
-				self.Nz = 51
+				self.Nz = 26
 			else:
 				test_env = RRETestProblem(self.training_hp['dt'], self.training_hp['dz'], self.training_hp['T'], self.training_hp['Z'],self.training_hp['noise'], self.training_hp['name'],'')
 				self.ttest_whole, self.ztest_whole, self.psitest_whole, self.Ktest_whole, self.thetatest_whole = test_env.get_training_data()
@@ -487,7 +487,8 @@ class RRENetwork(object):
 
 		#f
 		axs1[2,1].plot(self.array_data[0][6,1:-1], self.f_dis[6,:], 'b-')
-		axs1[2,1].plot(self.array_data[0][6,1:-1], array_data_temp[0][6,1:-1], 'ro--')
+		axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].shape), 'ro--')
+		# axs1[2,1].plot(self.array_data[0][6,1:-1], array_data_temp[0][6,1:-1], 'ro--')
 		axs1[2,1].set_title('f vs z')
 		axs1[2,1].set(xlabel='z', ylabel='f')
 		fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
