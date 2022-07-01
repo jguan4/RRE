@@ -40,11 +40,11 @@ class RRENetwork(object):
 		self.K = KNetwork(Kstruct, self.pathname)
 		self.Theta = ThetaNetwork(thetastruct, self.pathname)
 		self.weights = self.training_hp['weights']
-		self.BCweight = self.convert_tensor(self.weights[0])
+		self.psiweight = self.convert_tensor(self.weights[0])
 		self.fweight = self.convert_tensor(self.weights[1])
 		self.thetaweight = self.convert_tensor(self.weights[2])
 		self.fluxweight = self.convert_tensor(self.weights[3])
-		self.loss_log = [['Epoch'],['l_theta'],['l_f'],['l_top'],['l_bottom'],['weight_f'],['weight_flux']] # theta, f, top bound, lower bound
+		self.loss_log = [['Epoch'],['l_theta'],['l_f'],['l_top'],['l_bottom'],['weight_theta'],['weight_f'],['weight_flux'],['weight_psi']] # theta, f, top bound, lower bound
 		self.log_time = time.time()
 		self.wrap_variable_sizes()
 		self.starting_epoch = self.training_hp['starting_epoch']
@@ -104,14 +104,14 @@ class RRENetwork(object):
 
 	def weight_scheduling(self):
 		if self.scheduleing_toggle == 'constant':
-			return self.thetaweight, self.fweight, self.BCweight, self.fluxweight
+			return self.thetaweight, self.fweight, self.psiweight, self.fluxweight
 		elif self.scheduleing_toggle == 'linear':
 			thetaweight = self.linear_shedule(start_weight=self.thetaweight, end_weight = self.thetaweight/10000, duration = self.total_epoch/4*3)
-			BCweight = self.BCweight
+			psiweight = self.psiweight
 			fweight = self.fweight
 			fluxweight = self.fluxweight
 			# fweight = self.linear_shedule(start_weight=self.fweight, end_weight = 100*self.fweight, duration = self.total_epoch/4*3)
-			return thetaweight,fweight,BCweight, fluxweight
+			return thetaweight,fweight,psiweight, fluxweight
 
 	def exp_schedule(self,start_weight,end_weight,duration):
 		passed_epoch = self.epoch-self.starting_epoch
@@ -124,11 +124,12 @@ class RRENetwork(object):
 		return y
 
 	def loss(self, theta_data, residual_data, boundary_data, log = False):
-		thetaweight, fweight, BCweight, fluxweight = self.weight_scheduling()
+		thetaweight, fweight, psiweight, fluxweight = self.weight_scheduling()
 		loss = self.loss_theta(theta_data, log = log)*thetaweight+fweight*self.loss_residual(residual_data, log = log)+\
-			BCweight*self.loss_boundary(boundary_data, log = log)
+			self.loss_boundary(boundary_data, log = log)
 		if log:
-			self.loss_log[5].append(fweight.numpy())
+			self.loss_log[5].append(thetaweight.numpy())
+			self.loss_log[6].append(fweight.numpy())
 		return loss
 
 	def loss_theta(self, theta_data, log = False):
@@ -157,16 +158,18 @@ class RRENetwork(object):
 
 	def loss_boundary_data(self, bound, log = False):
 		psi_pred, K_pred, theta_pred, f_pred, flux_pred, [psiz_pred, psit_pred, thetat_pred, Kz_pred, psizz_pred] = self.rre_model(bound['z'], bound['t'])
+		_,_,psiweight,fluxweight = self.weight_scheduling()
 		if bound['type'] == 'flux':
-			fluxweight = self.weight_scheduling_flux()
 			loss = self.loss_reduce_mean(flux_pred, bound['data'])*fluxweight
 			if log:
-				self.loss_log[6].append(fluxweight.numpy())
+				self.loss_log[7].append(fluxweight.numpy())
 		elif bound['type'] == 'psiz':
 			loss = self.loss_reduce_mean(psiz_pred, bound['data'])
 		elif bound['type'] == 'psi':
 			# loss = self.loss_reduce_mean(psi_pred, bound['data'])
-			loss = self.loss_reduce_mean(psi_pred, bound['data'])/(self.psi_ub-self.psi_lb)**2
+			loss = self.loss_reduce_mean(psi_pred, bound['data'])/(self.psi_ub-self.psi_lb)**2*psiweight
+			if log:
+				self.loss_log[8].append(psiweight.numpy())
 		return loss
 
 	@tf.function
@@ -184,7 +187,7 @@ class RRENetwork(object):
 		with tf.GradientTape() as tape:
 			loss_value = self.loss(theta_data, residual_data, boundary_data, log = True)
 			# loss_boundary = self.loss_boundary(boundary_data, log = True)
-			# loss_value = loss+loss_boundary*self.BCweight
+			# loss_value = loss+loss_boundary*self.psiweight
 		grads = tape.gradient(loss_value, self.wrap_trainable_variables())
 		return loss_value, grads
 
@@ -195,7 +198,7 @@ class RRENetwork(object):
 				# _, _, theta_pred, f, _, _ = self.rre_model(z_tf, t_tf)
 				# loss = self.loss(theta_pred, theta, f, log = log)
 				# loss_boundary = self.loss_boundary(boundary_data, log = log)
-				# loss_value = loss+loss_boundary*self.BCweight
+				# loss_value = loss+loss_boundary*self.psiweight
 				loss_value = self.loss(theta_data, residual_data, boundary_data, log = log)
 			grad = tape.gradient(loss_value, self.wrap_trainable_variables())
 			grad_flat = []

@@ -1,4 +1,4 @@
-from RRENetwork import RRENetwork
+from RRENetwork_flux import RRENetwork_flux
 from RRETestProblem import RRETestProblem
 import pandas as pd
 import numpy as np
@@ -74,7 +74,7 @@ def psi_func(theta):
 
 def load_data(training_hp, csv_file = None):
 	if csv_file is not None:
-		EnvFolder = "./RRE_Bandai_{1}domain_{0}_weight_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
+		EnvFolder = "./RRE_Bandai_{1}domain_{0}_weight_flux_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
 		# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
 		Nt = int(training_hp['T']/training_hp['dt'])
 		Nz = int(training_hp['Z']/training_hp['dz'])+1
@@ -104,10 +104,16 @@ def load_data(training_hp, csv_file = None):
 		zf, tf, thetaf = extract_data(t,z,theta, Ne = np.absolute(training_hp['lb'][0])*10, Ni = 10)
 		ztb, ttb, fluxtb = extract_top_boundary(t,z,flux)
 		zbb, tbb, psibb = extract_bottom_boundary(t,z,psi, Nb = np.absolute(training_hp['lb'][0])*10)
+
+		flux_inputs = []
+		for item in [tt,tf,ttb,tbb]:
+			flux_inputs.append(flux_function(item))
+
+		fluxt, fluxf, fluxtb, fluxbb = flux_inputs
 		
-		theta_data = {'z':zt, 't':tt, 'data':thetat}
-		residual_data = {'z':zf, 't':tf}
-		boundary_data = {'top':{'z':ztb, 't':ttb, 'data':fluxtb, 'type':'flux'}, 'bottom':{'z':zbb, 't':tbb, 'data':psibb, 'type':'psi'}}
+		theta_data = {'z':zt, 't':tt, 'flux':fluxt, 'data':thetat}
+		residual_data = {'z':zf, 't':tf, 'flux':fluxf}
+		boundary_data = {'top':{'z':ztb, 't':ttb, 'flux':fluxtb, 'data':fluxtb, 'type':'flux'}, 'bottom':{'z':zbb, 't':tbb, 'flux':fluxbb, 'data':psibb, 'type':'psi'}}
 	else:
 		weights = training_hp['weights']
 		add_tag = "_f{0}_flux{2}_theta{1}".format(weights[1], weights[2], weights[3])
@@ -142,7 +148,10 @@ def test_data(test_hp, csv_file = None):
 		flux = data['flux'].values[:,None]
 		ztest_whole, ttest_whole, thetatest_whole, Ktest_whole, psitest_whole = extract_data_test(t,z,theta, K, psi)
 
+		flux_whole = flux_function(ttest_whole)
+
 		ztest, ttest, thetatest, Ktest, psitest = extract_data_test(t, z, theta, K, psi, T = 0.6)
+		fluxtest = flux_function(ttest)
 	else: 
 		test_env = RRETestProblem(test_hp['dt'], test_hp['dz'], test_hp['T'], test_hp['Z'],test_hp['noise'], test_hp['name'],'')
 		ttest_whole, ztest_whole, psitest_whole, Ktest_whole, thetatest_whole = test_env.get_training_data()
@@ -150,12 +159,12 @@ def test_data(test_hp, csv_file = None):
 		test_env = RRETestProblem(test_hp['dt'], test_hp['dz'], 70, test_hp['Z'],test_hp['noise'], test_hp['name'],'')
 		ttest, ztest, psitest, Ktest, thetatest = test_env.get_testing_data()
 
-	return ztest_whole, ttest_whole, thetatest_whole, Ktest_whole, psitest_whole, ttest, ztest, psitest, Ktest, thetatest
+	return ztest_whole, ttest_whole, flux_whole, thetatest_whole, Ktest_whole, psitest_whole, ttest, ztest, fluxtest, psitest, Ktest, thetatest
 
 
 def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggle, csv_file):
 	theta_data, residual_data, boundary_data, pathname = load_data(training_hp, csv_file = csv_file)
-	rrenet = RRENetwork(psistruct, Kstruct, thetastruct, training_hp, pathname)
+	rrenet = RRENetwork_flux(psistruct, Kstruct, thetastruct, training_hp, pathname)
 	if train_toggle == 'train':
 		rrenet.fit(theta_data, residual_data,boundary_data)
 
@@ -166,7 +175,7 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 	elif train_toggle == 'test':
 		rrenet.load_model()
 
-		ztest_whole, ttest_whole, thetatest_whole, Ktest_whole, psitest_whole, ttest, ztest, psitest, Ktest, thetatest = test_data(test_hp, csv_file)
+		ztest_whole, ttest_whole, flux_whole, thetatest_whole, Ktest_whole, psitest_whole, ttest, ztest, fluxtest, psitest, Ktest, thetatest = test_data(test_hp, csv_file)
 
 		# psi_pred, K_pred, theta_pred = rrenet.predict(ztest_whole, ttest_whole)
 		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz] = rrenet.rre_model(rrenet.convert_tensor(ztest_whole),rrenet.convert_tensor(ttest_whole))
@@ -261,13 +270,13 @@ name = 'Test1'
 csv_file = "sandy_loam_nod.csv" 
 if csv_file is not None:
 	# lb = [-20,0]
-	lb = [-50,0]
-	ub = [0,3]
+	lb = [-100,0,0]
+	ub = [0,3,1]
 else:
 	if name == 'Test1':
 		lb = [0,0]
 		ub = [40,360]
-psistruct = {'layers':[2,40,40,40,40,40,40,1]} 
+psistruct = {'layers':[3,40,40,40,40,40,40,1]} 
 Kstruct = {'layers':[1,40,40,40,1],'toggle':'MNN'} 
 thetastruct = {'layers':[1,40,1],'toggle':'MNN'} 
 # data = np.genfromtxt(dataname+'.csv',delimiter=',')
@@ -275,7 +284,7 @@ lbfgs_options={'disp': None, 'maxcor': 50, 'ftol': 2.220446049250313e-16, 'gtol'
 adam_options = {'epoch':10000}
 total_epoch = lbfgs_options['maxiter'] + adam_options['epoch']
 # 'dz': 1, 'dt': 10,'Z':40, 'T':360
-training_hp = {'dz': 0.1, 'dt': 0.012,'Z':100, 'T':3, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm1', 'weights': [1, 1e3, 10000, 1e-3], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'linear'}
+training_hp = {'dz': 0.1, 'dt': 0.012,'Z':100, 'T':3, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm1', 'weights': [1, 1e2, 100, 1e-5], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
 
 test_hp = {'name':'Test1', 'dz': 0.1, 'dt': .012,'Z':100, 'T':3, 'noise':0}
 
