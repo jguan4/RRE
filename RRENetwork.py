@@ -104,32 +104,27 @@ class RRENetwork(object):
 
 	def weight_scheduling(self):
 		if self.scheduleing_toggle == 'constant':
-			return self.thetaweight, self.fweight, self.BCweight
+			return self.thetaweight, self.fweight, self.BCweight, self.fluxweight
 		elif self.scheduleing_toggle == 'linear':
-			thetaweight = self.linear_shedule(start_weight=self.thetaweight, end_weight = 100*self.thetaweight, duration = self.total_epoch/4*3)
+			thetaweight = self.linear_shedule(start_weight=self.thetaweight, end_weight = self.thetaweight/10000, duration = self.total_epoch/4*3)
 			BCweight = self.BCweight
-			fweight = self.linear_shedule(start_weight=self.fweight, end_weight = 100*self.fweight, duration = self.total_epoch/4*3)
-			return thetaweight,fweight,BCweight
+			fweight = self.fweight
+			fluxweight = self.fluxweight
+			# fweight = self.linear_shedule(start_weight=self.fweight, end_weight = 100*self.fweight, duration = self.total_epoch/4*3)
+			return thetaweight,fweight,BCweight, fluxweight
 
 	def exp_schedule(self,start_weight,end_weight,duration):
 		passed_epoch = self.epoch-self.starting_epoch
-		y = s*np.exp(np.log(end_weight/start_weight)/duration*passed_epoch)
+		y = s*np.exp(np.log(end_weight/start_weight)/duration*passed_epoch) if passed_epoch<= duration else end_weight
 		return y
 
 	def linear_shedule(self, start_weight, end_weight, duration):
 		passed_epoch = self.epoch-self.starting_epoch
-		y = (end_weight-start_weight)/duration*passed_epoch+start_weight
+		y = (end_weight-start_weight)/duration*passed_epoch+start_weight if passed_epoch<= duration else end_weight
 		return y
 
-	def weight_scheduling_flux(self):
-		if self.scheduleing_toggle == 'constant':
-			return self.fluxweight
-		elif self.scheduleing_toggle == 'linear':
-			fluxweight = self.linear_shedule(start_weight = self.fluxweight,end_weight = 100*self.fluxweight, duration= self.total_epoch/4*3)
-			return fluxweight
-
 	def loss(self, theta_data, residual_data, boundary_data, log = False):
-		thetaweight, fweight, BCweight = self.weight_scheduling()
+		thetaweight, fweight, BCweight, fluxweight = self.weight_scheduling()
 		loss = self.loss_theta(theta_data, log = log)*thetaweight+fweight*self.loss_residual(residual_data, log = log)+\
 			BCweight*self.loss_boundary(boundary_data, log = log)
 		if log:
@@ -486,9 +481,9 @@ class RRENetwork(object):
 		axs1[2,0].set(xlabel='z', ylabel='psi_zz')
 
 		#f
-		axs1[2,1].plot(self.array_data[0][6,1:-1], self.f_dis[6,:], 'b-')
-		axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].shape), 'ro--')
-		# axs1[2,1].plot(self.array_data[0][6,1:-1], array_data_temp[0][6,1:-1], 'ro--')
+		axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].shape), 'b-')
+		# axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		axs1[2,1].plot(self.array_data[0][6,1:-1], array_data_temp[0][6,1:-1], 'ro--')
 		axs1[2,1].set_title('f vs z')
 		axs1[2,1].set(xlabel='z', ylabel='f')
 		fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
@@ -602,7 +597,7 @@ class KNetwork(object):
 		for width in self.layers[1:-1]:
 			self.net.add(tf.keras.layers.Dense(
 				width, activation=tf.nn.tanh,
-				kernel_initializer=MNN_Init))
+				kernel_initializer=NMNN_Init))
 		self.net.add(KOutput(self.layers[-1]))
 
 	def initialize_KNN(self):
@@ -729,6 +724,22 @@ class MNN_Init(tf.keras.initializers.Initializer):
 		self.stddev = np.sqrt(2/(in_dim + out_dim))
 		W = tf.random.normal(shape, stddev=self.stddev, dtype=dtype)
 		return W**2
+
+	def get_config(self):  # To support serialization
+		return {"mean": self.mean, "stddev": self.stddev}
+
+class NMNN_Init(tf.keras.initializers.Initializer):
+
+	def __init__(self):
+		self.mean = 0 
+		self.stddev = 0
+
+	def __call__(self, shape, dtype=None, **kwargs):
+		in_dim = shape[0]
+		out_dim = shape[1]
+		self.stddev = np.sqrt(2/(in_dim + out_dim))
+		W = tf.random.normal(shape, stddev=self.stddev, dtype=dtype)
+		return -W**2
 
 	def get_config(self):  # To support serialization
 		return {"mean": self.mean, "stddev": self.stddev}
