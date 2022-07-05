@@ -120,42 +120,85 @@ class RRENetwork_flux(RRENetwork):
 	def plotting(self,epoch):
 		if epoch == 0 or epoch == self.tf_epochs:
 			if self.training_hp['csv_file'] is not None:
-				data = pd.read_csv('./'+self.training_hp['csv_file'])
-				t = data['time'].values[:,None]
-				z = data['depth'].values[:,None]
-				psi = data['head'].values[:,None]
-				K = data['K'].values[:,None]
-				C = data['C'].values[:,None]
-				theta = data['theta'].values[:,None]
-				flux = data['flux'].values[:,None]
-				test_data = []
-				T = None
-				for item in [z,t,theta, K, psi]:
-					Item = np.reshape(item,[251,1001])
-					if T is None:
-					# Items = Item[int(T/0.012),0:200]
-						Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
-					else:
-						Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
-					Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-					test_data.append(Itemt)
-				self.ztest_whole, self.ttest_whole, self.thetatest_whole, self.Ktest_whole, self.psitest_whole = test_data
-				self.flux_whole = self.flux_function(self.ttest_whole)
-				test_data = []
-				T = 0.6
-				for item in [z,t,theta, K, psi]:
-					Item = np.reshape(item,[251,1001])
-					if T is None:
-					# Items = Item[int(T/0.012),0:200]
-						Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
-					else:
-						Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
-					Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-					test_data.append(Itemt)
-				self.ztest, self.ttest, self.thetatest, self.Ktest, self.psitest = test_data
-				self.fluxtest = self.flux_function(self.ttest)
-				self.Nt = 251
-				self.Nz = int(np.absolute(self.lb.numpy()[0])*10/20)
+				if self.training_hp['csv_file'] == 'sandy_loam_nod.csv':
+
+					data = pd.read_csv('./'+self.training_hp['csv_file'])
+					t = data['time'].values[:,None]
+					z = data['depth'].values[:,None]
+					psi = data['head'].values[:,None]
+					K = data['K'].values[:,None]
+					C = data['C'].values[:,None]
+					theta = data['theta'].values[:,None]
+					flux = data['flux'].values[:,None]
+					test_data = []
+					T = None
+					for item in [z,t,theta, K, psi]:
+						Item = np.reshape(item,[251,1001])
+						if T is None:
+						# Items = Item[int(T/0.012),0:200]
+							Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
+						else:
+							Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
+						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+						test_data.append(Itemt)
+					self.ztest_whole, self.ttest_whole, self.thetatest_whole, self.Ktest_whole, self.psitest_whole = test_data
+					self.flux_whole = self.flux_function(self.ttest_whole)
+					test_data = []
+					T = 0.6
+					for item in [z,t,theta, K, psi]:
+						Item = np.reshape(item,[251,1001])
+						if T is None:
+						# Items = Item[int(T/0.012),0:200]
+							Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
+						else:
+							Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
+						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+						test_data.append(Itemt)
+					self.ztest, self.ttest, self.thetatest, self.Ktest, self.psitest = test_data
+					self.fluxtest = self.flux_function(self.ttest)
+					self.Nt = 251
+					self.Nz = int(np.absolute(self.lb.numpy()[0])*10/20)
+				elif self.training_hp['csv_file'] == 'test_plot_data.csv':
+					Nt = 19007
+					Nz = 3
+					data = pd.read_csv('./'+self.training_hp['csv_file'] )
+					t = data['time'].values[:,None]
+					z = data['depth'].values[:,None]
+					flux = data['flux'].values[:,None]
+					theta = data['theta'].values[:,None]
+					T = t[int(Nt/4)]
+					test_data = []
+					for item in [z,t,flux,theta]:
+						Item = np.reshape(item,[Nt,Nz])
+						if T is None:
+						# Items = Item[int(T/0.012),0:200]
+							Items = Item[0:int(Nt/2):8,:]
+						else:
+							Items = Item[int(Nt/4),:]
+						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+						test_data.append(Itemt)
+					self.ztest, self.ttest, self.fluxtest, self.thetatest = test_data
+					self.zres = np.linspace(-1,-64,64)
+					self.tres = T*np.ones(self.zres.shape)
+					self.fluxres = self.fluxtest[0]*np.ones(self.zres.shape)
+
+					tbdata = pd.read_csv('./test_plot_tb.csv')
+					t = tbdata['time'].values[:,None]
+					z = tbdata['depth'].values[:,None]
+					flux = tbdata['flux'].values[:,None]
+					flux_test_data = []
+					T = None
+					# ztb, ttb, fluxtb = extract_data_timewise([z,t,flux],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt/2), Ni = 1)
+					for item in [z,t,flux]:
+						Item = np.reshape(item,[Nt,1])
+						if T is None:
+						# Items = Item[int(T/0.012),0:200]
+							Items = Item[0:int(Nt/2):8,:]
+						else:
+							Items = Item[int(Nt/4),:]
+						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+						flux_test_data.append(Itemt)
+					self.zflux, self.tflux, self.fluxflux = flux_test_data
 
 			else:
 				test_env = RRETestProblem(self.training_hp['dt'], self.training_hp['dz'], self.training_hp['T'], self.training_hp['Z'],self.training_hp['noise'], self.training_hp['name'],'')
@@ -166,73 +209,76 @@ class RRENetwork_flux(RRENetwork):
 				self.Nt = int(self.training_hp['T']/self.training_hp['dt'])
 				self.Nz = int(self.training_hp['Z']/self.training_hp['dz'])+1
 
-			self.array_data = []
+			# self.array_data = []
 
-			for item in [self.ztest_whole, self.ttest_whole, self.thetatest_whole, self.Ktest_whole, self.psitest_whole, self.flux_whole]:
-				Item = np.reshape(item,[self.Nt,self.Nz])
-				self.array_data.append(Item)
+			# for item in [self.ztest_whole, self.ttest_whole, self.thetatest_whole, self.Ktest_whole, self.psitest_whole, self.flux_whole]:
+			# 	Item = np.reshape(item,[self.Nt,self.Nz])
+			# 	self.array_data.append(Item)
 
-			self.thetat_dis = (self.array_data[2][1:,:]-self.array_data[2][:-1,:])/self.training_hp['dt']
-			self.psiz_dis = -(self.array_data[4][:,1:]-self.array_data[4][:,:-1])/self.training_hp['dz']
-			self.psit_dis = (self.array_data[4][1:,:]-self.array_data[4][:-1,:])/self.training_hp['dt']
-			self.Kz_dis = -(self.array_data[3][:,1:]-self.array_data[3][:,:-1])/self.training_hp['dz']
-			self.psizz_dis = (self.psiz_dis[:,1:]-self.psiz_dis[:,:-1])/self.training_hp['dz']
-			self.flux_dis = (self.array_data[5][1:,:]-self.array_data[5][:-1,:])/self.training_hp['dt']
-			self.f_dis =  self.thetat_dis[:,1:-1] - self.Kz_dis[1:,1:]*self.psiz_dis[1:,1:]- (self.array_data[3][1:,1:-1])*self.psizz_dis[1:,:] - self.Kz_dis[1:,1:]
+			# self.thetat_dis = (self.array_data[2][1:,:]-self.array_data[2][:-1,:])/self.training_hp['dt']
+			# self.psiz_dis = -(self.array_data[4][:,1:]-self.array_data[4][:,:-1])/self.training_hp['dz']
+			# self.psit_dis = (self.array_data[4][1:,:]-self.array_data[4][:-1,:])/self.training_hp['dt']
+			# self.Kz_dis = -(self.array_data[3][:,1:]-self.array_data[3][:,:-1])/self.training_hp['dz']
+			# self.psizz_dis = (self.psiz_dis[:,1:]-self.psiz_dis[:,:-1])/self.training_hp['dz']
+			# self.flux_dis = (self.array_data[5][1:,:]-self.array_data[5][:-1,:])/self.training_hp['dt']
+			# self.f_dis =  self.thetat_dis[:,1:-1] - self.Kz_dis[1:,1:]*self.psiz_dis[1:,1:]- (self.array_data[3][1:,1:-1])*self.psizz_dis[1:,:] - self.Kz_dis[1:,1:]
 
-		array_data_temp = []
+		# array_data_temp = []
 
-		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = self.rre_model(self.convert_tensor(self.ztest_whole),self.convert_tensor(self.ttest_whole), self.convert_tensor(self.flux_whole))
-		for item in [f_residual, psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual]:
-			Item = np.reshape(item,[self.Nt,self.Nz])
-			array_data_temp.append(Item)
+		# psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = self.rre_model(self.convert_tensor(self.ztest_whole),self.convert_tensor(self.ttest_whole), self.convert_tensor(self.flux_whole))
+		# for item in [f_residual, psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual]:
+			# Item = np.reshape(item,[self.Nt,self.Nz])
+			# array_data_temp.append(Item)
 
-		psi_pred, K_pred, theta_pred = self.predict(self.ztest,self.ttest,self.fluxtest)
-		fig1, axs1 = plt.subplots(4, 2)
+		# psi_pred, K_pred, theta_pred = self.predict(self.ztest,self.ttest,self.fluxtest)
+		_, _, theta_pred, _, _, _ = self.rre_model(self.convert_tensor(self.ztest),self.convert_tensor(self.ttest),self.convert_tensor(self.fluxtest))
+		_, _, _, f_residual, _, _ = self.rre_model(self.convert_tensor(self.zres),self.convert_tensor(self.tres),self.convert_tensor(self.fluxres))
+		_, _, _, _, _, [_, _, _, _, _, flux_residual] = self.rre_model(self.convert_tensor(self.zflux),self.convert_tensor(self.tflux),self.convert_tensor(self.fluxflux))
+		# fig1, axs1 = plt.subplots(4, 2)
 		#thetat
-		axs1[0,0].plot(self.array_data[0][6,:], self.thetat_dis[6,:], 'b-')
-		axs1[0,0].plot(self.array_data[0][6,:], array_data_temp[3][6,:], 'ro--')
-		axs1[0,0].set_title('Theta_t vs z')
-		axs1[0,0].set(xlabel='z', ylabel='theta_t')
+		# axs1[0,0].plot(self.array_data[0][6,:], self.thetat_dis[6,:], 'b-')
+		# axs1[0,0].plot(self.array_data[0][6,:], array_data_temp[3][6,:], 'ro--')
+		# axs1[0,0].set_title('Theta_t vs z')
+		# axs1[0,0].set(xlabel='z', ylabel='theta_t')
 
-		#psiz
-		axs1[0,1].plot(self.array_data[0][6,1:], self.psiz_dis[6,:], 'b-')
-		axs1[0,1].plot(self.array_data[0][6,1:], array_data_temp[1][6,1:], 'ro--')
-		axs1[0,1].set_title('psi_z vs z')
-		axs1[0,1].set(xlabel='z', ylabel='psi_z')
+		# #psiz
+		# axs1[0,1].plot(self.array_data[0][6,1:], self.psiz_dis[6,:], 'b-')
+		# axs1[0,1].plot(self.array_data[0][6,1:], array_data_temp[1][6,1:], 'ro--')
+		# axs1[0,1].set_title('psi_z vs z')
+		# axs1[0,1].set(xlabel='z', ylabel='psi_z')
 
-		#psit
-		axs1[1,0].plot(self.array_data[0][6,:], self.psit_dis[6,:], 'b-')
-		axs1[1,0].plot(self.array_data[0][6,:], array_data_temp[2][6,:], 'ro--')
-		axs1[1,0].set_title('psi_t vs z')
-		axs1[1,0].set(xlabel='z', ylabel='psi_t')
+		# #psit
+		# axs1[1,0].plot(self.array_data[0][6,:], self.psit_dis[6,:], 'b-')
+		# axs1[1,0].plot(self.array_data[0][6,:], array_data_temp[2][6,:], 'ro--')
+		# axs1[1,0].set_title('psi_t vs z')
+		# axs1[1,0].set(xlabel='z', ylabel='psi_t')
 
-		#Kz
-		axs1[1,1].plot(self.array_data[0][6,1:], self.Kz_dis[6,:], 'b-')
-		axs1[1,1].plot(self.array_data[0][6,1:], array_data_temp[4][6,1:], 'ro--')
-		axs1[1,1].set_title('K_z vs z')
-		axs1[1,1].set(xlabel='z', ylabel='K_z')
+		# #Kz
+		# axs1[1,1].plot(self.array_data[0][6,1:], self.Kz_dis[6,:], 'b-')
+		# axs1[1,1].plot(self.array_data[0][6,1:], array_data_temp[4][6,1:], 'ro--')
+		# axs1[1,1].set_title('K_z vs z')
+		# axs1[1,1].set(xlabel='z', ylabel='K_z')
 
-		#psizz
-		axs1[2,0].plot(self.array_data[0][6,1:-1], self.psizz_dis[6,:], 'b-')
-		axs1[2,0].plot(self.array_data[0][6,1:-1], array_data_temp[5][6,1:-1], 'ro--')
-		axs1[2,0].set_title('psi_zz vs z')
-		axs1[2,0].set(xlabel='z', ylabel='psi_zz')
+		# #psizz
+		# axs1[2,0].plot(self.array_data[0][6,1:-1], self.psizz_dis[6,:], 'b-')
+		# axs1[2,0].plot(self.array_data[0][6,1:-1], array_data_temp[5][6,1:-1], 'ro--')
+		# axs1[2,0].set_title('psi_zz vs z')
+		# axs1[2,0].set(xlabel='z', ylabel='psi_zz')
 
 		#f
-		axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].shape), 'b-')
-		# axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
-		axs1[2,1].plot(self.array_data[0][6,1:-1], array_data_temp[0][6,1:-1], 'ro--')
-		axs1[2,1].set_title('f vs z')
-		axs1[2,1].set(xlabel='z', ylabel='f')
-		fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
+		# axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.array_data[0][6,1:-1].shape), 'b-')
+		# # axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs1[2,1].plot(self.array_data[0][6,1:-1], array_data_temp[0][6,1:-1], 'ro--')
+		# axs1[2,1].set_title('f vs z')
+		# axs1[2,1].set(xlabel='z', ylabel='f')
+		# fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
 
-		axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.array_data[0][6,1:-1].shape), 'b-')
-		# axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
-		axs1[3,0].plot(self.array_data[0][6,1:-1], array_data_temp[6][6,1:-1], 'ro--')
-		axs1[3,0].set_title('flux_residual vs z')
-		axs1[3,0].set(xlabel='z', ylabel='flux f')
-		fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
+		# axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.array_data[0][6,1:-1].shape), 'b-')
+		# # axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs1[3,0].plot(self.array_data[0][6,1:-1], array_data_temp[6][6,1:-1], 'ro--')
+		# axs1[3,0].set_title('flux_residual vs z')
+		# axs1[3,0].set(xlabel='z', ylabel='flux f')
+		# fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
 		# plt.show()
 
 		# order_str = ['theta','K','psi']
@@ -248,21 +294,34 @@ class RRENetwork_flux(RRENetwork):
 		axs[0,0].set_title('Theta vs z')
 		axs[0,0].set(xlabel='z', ylabel='theta')
 
-		axs[0,1].semilogy(self.ztest, K_pred, 'ro--')
-		axs[0,1].semilogy(self.ztest, self.Ktest, 'b-')
-		axs[0,1].set_title('K vs z')
-		axs[0,1].set(xlabel='z', ylabel='K')
+		axs[0,1].plot(self.zres, np.zeros(self.zres.shape), 'b-')
+		# axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		axs[0,1].plot(self.zres, f_residual, 'ro--')
+		axs[0,1].set_title('f vs z')
+		axs[0,1].set(xlabel='z', ylabel='f')
 
-		axs[1,0].plot(self.ztest, psi_pred, 'ro--')
-		axs[1,0].plot(self.ztest, self.psitest, 'b-')
-		axs[1,0].set_title('Psi vs z')
-		axs[1,0].set(xlabel='z', ylabel='psi')
+		axs[1,0].plot(self.tflux, np.zeros(self.tflux.shape), 'b-')
+		# axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		axs[1,0].plot(self.tflux, flux_residual, 'ro--')
+		axs[1,0].set_title('flux_residual vs z')
+		axs[1,0].set(xlabel='t', ylabel='flux f')
+		fig.suptitle("epoch {0}, T = {1}".format(epoch,self.ttest[0,0]), fontsize=16)
 
-		axs[1,1].plot(psi_pred, theta_pred, 'ro--')
-		axs[1,1].plot(self.psitest, self.thetatest, 'b-')
-		axs[1,1].set_title('Theta vs Psi')
-		axs[1,1].set(xlabel='psi', ylabel='theta')
-		fig.suptitle("T = {0}".format(self.ttest[0,0]), fontsize=16)
+		# axs[0,1].semilogy(self.ztest, K_pred, 'ro--')
+		# axs[0,1].semilogy(self.ztest, self.Ktest, 'b-')
+		# axs[0,1].set_title('K vs z')
+		# axs[0,1].set(xlabel='z', ylabel='K')
+
+		# axs[1,0].plot(self.ztest, psi_pred, 'ro--')
+		# axs[1,0].plot(self.ztest, self.psitest, 'b-')
+		# axs[1,0].set_title('Psi vs z')
+		# axs[1,0].set(xlabel='z', ylabel='psi')
+
+		# axs[1,1].plot(psi_pred, theta_pred, 'ro--')
+		# axs[1,1].plot(self.psitest, self.thetatest, 'b-')
+		# axs[1,1].set_title('Theta vs Psi')
+		# axs[1,1].set(xlabel='psi', ylabel='theta')
+		# fig.suptitle("T = {0}".format(self.ttest[0,0]), fontsize=16)
 
 		# plt.show()
 		filename = "{1}/epoch_{0}.pdf".format(epoch,self.pathname)
