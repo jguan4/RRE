@@ -338,11 +338,11 @@ name = 'Test1'
 # csv_file = None 
 csv_file = "test_plot_data.csv" 
 if csv_file is not None:
-	if csv_file is 'sandy_loam_nod.csv':
+	if csv_file == 'sandy_loam_nod.csv':
 		# lb = [-20,0]
 		lb = [-100,0,0]
 		ub = [0,3,1]
-	elif csv_file is 'test_plot_data.csv':
+	elif csv_file == 'test_plot_data.csv':
 		lb = [-65,0,0]
 		ub = [0,198,1]
 else:
