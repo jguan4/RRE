@@ -216,10 +216,18 @@ def test_data(test_hp, csv_file = None):
 			fluxtest = flux_function(ttest)
 		elif csv_file == 'test_plot_data.csv':
 			data = pd.read_csv('./'+csv_file)
-			t = data['time'].values[:,None]
-			z = data['depth'].values[:,None]
-			flux = data['flux'].values[:,None]
-			theta = data['theta'].values[:,None]
+			ttest_whole = data['time'].values[:,None]
+			ztest_whole = data['depth'].values[:,None]
+			flux_whole = data['flux'].values[:,None]
+			theta_whole = data['theta'].values[:,None]
+			Ktest_whole = None 
+			psitest_whole = None 
+			ttest = None
+			ztest = None
+			fluxtest = None 
+			psitest = None
+			Ktest = None
+			thetatest = None
 
 	else: 
 		test_env = RRETestProblem(test_hp['dt'], test_hp['dz'], test_hp['T'], test_hp['Z'],test_hp['noise'], test_hp['name'],'')
@@ -247,92 +255,99 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 		ztest_whole, ttest_whole, flux_whole, thetatest_whole, Ktest_whole, psitest_whole, ttest, ztest, fluxtest, psitest, Ktest, thetatest = test_data(test_hp, csv_file)
 
 		# psi_pred, K_pred, theta_pred = rrenet.predict(ztest_whole, ttest_whole)
-		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz] = rrenet.rre_model(rrenet.convert_tensor(ztest_whole),rrenet.convert_tensor(ttest_whole))
-		Nt = int(test_hp['T']/test_hp['dt'])+1
-		Nz = int(test_hp['Z']/test_hp['dz'])
-		array_data = []
+		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = rrenet.rre_model(rrenet.convert_tensor(ztest_whole),rrenet.convert_tensor(ttest_whole), rrenet.convert_tensor(flux_whole))
+		Nt = 19007
+		Nz = 3
+		# Nt = int(test_hp['T']/test_hp['dt'])+1
+		# Nz = int(test_hp['Z']/test_hp['dz'])
+		# array_data = []
 
-		for item in [ztest_whole, ttest_whole, thetatest_whole, Ktest_whole, psitest_whole, f_residual, psi_z, psi_t, theta_t, K_z, psi_zz]:
-			Item = np.reshape(item,[Nt,Nz])
-			array_data.append(Item)
+		# for item in [ztest_whole, ttest_whole, thetatest_whole, Ktest_whole, psitest_whole, f_residual, psi_z, psi_t, theta_t, K_z, psi_zz]:
+		# 	Item = np.reshape(item,[Nt,Nz])
+		# 	array_data.append(Item)
 
-		thetat_dis = (array_data[2][1:,:]-array_data[2][:-1,:])/test_hp['dt']
-		psiz_dis = -(array_data[4][:,1:]-array_data[4][:,:-1])/test_hp['dz']
-		psit_dis = (array_data[4][1:,:]-array_data[4][:-1,:])/test_hp['dt']
-		Kz_dis = -(array_data[3][:,1:]-array_data[3][:,:-1])/test_hp['dz']
-		psizz_dis = (psiz_dis[:,1:]-psiz_dis[:,:-1])/test_hp['dz']
-		f_dis =  thetat_dis[:,1:-1] - Kz_dis[1:,1:]*psiz_dis[1:,1:]- (array_data[3][1:,1:-1])*psizz_dis[1:,:] - Kz_dis[1:,1:]
+		# thetat_dis = (array_data[2][1:,:]-array_data[2][:-1,:])/test_hp['dt']
+		# psiz_dis = -(array_data[4][:,1:]-array_data[4][:,:-1])/test_hp['dz']
+		# psit_dis = (array_data[4][1:,:]-array_data[4][:-1,:])/test_hp['dt']
+		# Kz_dis = -(array_data[3][:,1:]-array_data[3][:,:-1])/test_hp['dz']
+		# psizz_dis = (psiz_dis[:,1:]-psiz_dis[:,:-1])/test_hp['dz']
+		# f_dis =  thetat_dis[:,1:-1] - Kz_dis[1:,1:]*psiz_dis[1:,1:]- (array_data[3][1:,1:-1])*psizz_dis[1:,:] - Kz_dis[1:,1:]
 
-		fig1, axs1 = plt.subplots(3, 2)
-		#thetat
-		axs1[0,0].plot(array_data[0][6,:], thetat_dis[6,:], 'b-')
-		axs1[0,0].plot(array_data[0][6,:], array_data[8][6,:], 'ro--')
-		axs1[0,0].set_title('Theta_t vs z')
-		axs1[0,0].set(xlabel='z', ylabel='theta_t')
+		# fig1, axs1 = plt.subplots(3, 2)
+		# #thetat
+		# axs1[0,0].plot(array_data[0][6,:], thetat_dis[6,:], 'b-')
+		# axs1[0,0].plot(array_data[0][6,:], array_data[8][6,:], 'ro--')
+		# axs1[0,0].set_title('Theta_t vs z')
+		# axs1[0,0].set(xlabel='z', ylabel='theta_t')
 
-		#psiz
-		axs1[0,1].plot(array_data[0][6,1:], psiz_dis[6,:], 'b-')
-		axs1[0,1].plot(array_data[0][6,1:], array_data[6][6,1:], 'ro--')
-		axs1[0,1].set_title('psi_z vs z')
-		axs1[0,1].set(xlabel='z', ylabel='psi_z')
+		# #psiz
+		# axs1[0,1].plot(array_data[0][6,1:], psiz_dis[6,:], 'b-')
+		# axs1[0,1].plot(array_data[0][6,1:], array_data[6][6,1:], 'ro--')
+		# axs1[0,1].set_title('psi_z vs z')
+		# axs1[0,1].set(xlabel='z', ylabel='psi_z')
 
-		#psit
-		axs1[1,0].plot(array_data[0][6,:], psit_dis[6,:], 'b-')
-		axs1[1,0].plot(array_data[0][6,:], array_data[7][6,:], 'ro--')
-		axs1[1,0].set_title('psi_t vs z')
-		axs1[1,0].set(xlabel='z', ylabel='psi_t')
+		# #psit
+		# axs1[1,0].plot(array_data[0][6,:], psit_dis[6,:], 'b-')
+		# axs1[1,0].plot(array_data[0][6,:], array_data[7][6,:], 'ro--')
+		# axs1[1,0].set_title('psi_t vs z')
+		# axs1[1,0].set(xlabel='z', ylabel='psi_t')
 
-		#Kz
-		axs1[1,1].plot(array_data[0][6,1:], Kz_dis[6,:], 'b-')
-		axs1[1,1].plot(array_data[0][6,1:], array_data[9][6,1:], 'ro--')
-		axs1[1,1].set_title('K_z vs z')
-		axs1[1,1].set(xlabel='z', ylabel='K_z')
+		# #Kz
+		# axs1[1,1].plot(array_data[0][6,1:], Kz_dis[6,:], 'b-')
+		# axs1[1,1].plot(array_data[0][6,1:], array_data[9][6,1:], 'ro--')
+		# axs1[1,1].set_title('K_z vs z')
+		# axs1[1,1].set(xlabel='z', ylabel='K_z')
 
-		#psizz
-		axs1[2,0].plot(array_data[0][6,1:-1], psizz_dis[6,:], 'b-')
-		axs1[2,0].plot(array_data[0][6,1:-1], array_data[10][6,1:-1], 'ro--')
-		axs1[2,0].set_title('psi_zz vs z')
-		axs1[2,0].set(xlabel='z', ylabel='psi_zz')
+		# #psizz
+		# axs1[2,0].plot(array_data[0][6,1:-1], psizz_dis[6,:], 'b-')
+		# axs1[2,0].plot(array_data[0][6,1:-1], array_data[10][6,1:-1], 'ro--')
+		# axs1[2,0].set_title('psi_zz vs z')
+		# axs1[2,0].set(xlabel='z', ylabel='psi_zz')
 
-		#f
-		axs1[2,1].plot(array_data[0][6,1:-1], f_dis[6,:], 'b-')
-		axs1[2,1].plot(array_data[0][6,1:-1], array_data[5][6,1:-1], 'ro--')
-		axs1[2,1].set_title('f vs z')
-		axs1[2,1].set(xlabel='z', ylabel='f')
-		# plt.show()
+		# #f
+		# axs1[2,1].plot(array_data[0][6,1:-1], f_dis[6,:], 'b-')
+		# axs1[2,1].plot(array_data[0][6,1:-1], array_data[5][6,1:-1], 'ro--')
+		# axs1[2,1].set_title('f vs z')
+		# axs1[2,1].set(xlabel='z', ylabel='f')
+		# # plt.show()
 
-		order_str = ['theta','K','psi']
-		for (ostr,data, pred) in zip(order_str,[thetatest_whole, Ktest_whole, psitest_whole], [theta_pred,K_pred,psi_pred]):
+		# order_str = ['theta','K','psi']
+		# for (ostr,data, pred) in zip(order_str,[thetatest_whole, Ktest_whole, psitest_whole], [theta_pred,K_pred,psi_pred]):
+		# 	err = relative_error(data,pred)
+		# 	print("For {0}, relative error is {1}.\n".format(ostr,err))
+
+		order_str = ['theta']
+		for (ostr,data, pred) in zip(order_str,[thetatest_whole], [theta_pred]):
 			err = relative_error(data,pred)
 			print("For {0}, relative error is {1}.\n".format(ostr,err))
 
-		psi_pred, K_pred, theta_pred = rrenet.predict(ztest,ttest)
+		# psi_pred, K_pred, theta_pred = rrenet.predict(ztest,ttest)
 
-		fig, axs = plt.subplots(2, 2)
-		axs[0,0].plot(ztest, theta_pred, 'ro--')
-		axs[0,0].plot(ztest, thetatest, 'b-')
-		axs[0,0].set_title('Theta vs z')
-		axs[0,0].set(xlabel='z', ylabel='theta')
+		# fig, axs = plt.subplots(2, 2)
+		# axs[0,0].plot(ztest, theta_pred, 'ro--')
+		# axs[0,0].plot(ztest, thetatest, 'b-')
+		# axs[0,0].set_title('Theta vs z')
+		# axs[0,0].set(xlabel='z', ylabel='theta')
 
-		axs[0,1].semilogy(ztest, K_pred, 'ro--')
-		axs[0,1].semilogy(ztest, Ktest, 'b-')
-		axs[0,1].set_title('K vs z')
-		axs[0,1].set(xlabel='z', ylabel='K')
+		# axs[0,1].semilogy(ztest, K_pred, 'ro--')
+		# axs[0,1].semilogy(ztest, Ktest, 'b-')
+		# axs[0,1].set_title('K vs z')
+		# axs[0,1].set(xlabel='z', ylabel='K')
 
-		axs[1,0].plot(ztest, psi_pred, 'ro--')
-		axs[1,0].plot(ztest, psitest, 'b-')
-		axs[1,0].set_title('Psi vs z')
-		axs[1,0].set(xlabel='z', ylabel='psi')
+		# axs[1,0].plot(ztest, psi_pred, 'ro--')
+		# axs[1,0].plot(ztest, psitest, 'b-')
+		# axs[1,0].set_title('Psi vs z')
+		# axs[1,0].set(xlabel='z', ylabel='psi')
 
-		axs[1,1].plot(psi_pred, theta_pred, 'ro--')
-		axs[1,1].plot(psitest, thetatest, 'b-')
-		axs[1,1].set_title('Theta vs Psi')
-		axs[1,1].set(xlabel='psi', ylabel='theta')
+		# axs[1,1].plot(psi_pred, theta_pred, 'ro--')
+		# axs[1,1].plot(psitest, thetatest, 'b-')
+		# axs[1,1].set_title('Theta vs Psi')
+		# axs[1,1].set(xlabel='psi', ylabel='theta')
 
-		plt.show()
+		# plt.show()
 
 
-train_toggle = 'train'
+train_toggle = 'test'
 starting_epoch = 0
 name = 'Test1'
 # csv_file = None 
