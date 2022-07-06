@@ -3,9 +3,9 @@ from RRETestProblem import RRETestProblem
 import pandas as pd
 import numpy as np
 import os
-# from tkinter import *
-# import matplotlib
-# matplotlib.use('TkAgg')
+from tkinter import *
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -128,7 +128,7 @@ def load_data(training_hp, csv_file = None):
 			boundary_data = {'top':{'z':ztb, 't':ttb, 'flux':fluxtb, 'data':fluxtb, 'type':'flux'}, 'bottom':{'z':zbb, 't':tbb, 'flux':fluxbb, 'data':psibb, 'type':'psi'}}
 
 		elif csv_file == 'test_plot_data.csv':
-			EnvFolder = "./RRE_testplot_{1}domain_halftime_{0}_weight_fluxc_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
+			EnvFolder = "./RRE_testplot_{1}domain_halftime_{0}_weight_fluxcn_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
 			# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
 			Nt = 19006
 			Nz = 3
@@ -262,11 +262,13 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 		zt, tt, fluxt, thetat = extract_data_timewise([ztest_whole,ttest_whole,flux_whole,thetatest_whole],Nt = Nt, Nz = Nz, Ns = 0, Ne = int(Nt)+1, Ni = 1)
 		# psi_pred, K_pred, theta_pred = rrenet.predict(ztest_whole, ttest_whole)
 		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = rrenet.rre_model(rrenet.convert_tensor(zt),rrenet.convert_tensor(tt), rrenet.convert_tensor(fluxt))
-		diff =np.absolute(theta_pred-thetat)
+		diff =(theta_pred-thetat)
+		# diff =np.absolute(theta_pred-thetat)
 		diff_mat = np.reshape(diff, [int(Nt), Nz])
 		fluxt_mat = np.reshape(fluxt, [int(Nt), Nz])
 		tt_mat = np.reshape(tt, [int(Nt), Nz])
-		# print(np.sum(thetat**2))
+		print(np.sum(diff**2)/np.sum(thetat**2))
+		input()
 		fig,ax = plt.subplots(2,1)
 		ax[0].plot(tt_mat[:,0],diff_mat[:,0])
 		ax[0].plot(tt_mat[:,0],diff_mat[:,1])
@@ -375,8 +377,8 @@ if csv_file is not None:
 		lb = [-100,0,0]
 		ub = [0,3,1]
 	elif csv_file == 'test_plot_data.csv':
-		lb = [-65,0,0]
-		ub = [0,198,1]
+		lb = [-65,0,-10]
+		ub = [0,198,0]
 else:
 	if name == 'Test1':
 		lb = [0,0]
