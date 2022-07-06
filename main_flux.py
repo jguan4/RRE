@@ -125,7 +125,7 @@ def load_data(training_hp, csv_file = None):
 			boundary_data = {'top':{'z':ztb, 't':ttb, 'flux':fluxtb, 'data':fluxtb, 'type':'flux'}, 'bottom':{'z':zbb, 't':tbb, 'flux':fluxbb, 'data':psibb, 'type':'psi'}}
 
 		elif csv_file == 'test_plot_data.csv':
-			EnvFolder = "./RRE_testplot_{1}domain_{0}_weight_flux_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
+			EnvFolder = "./RRE_testplot_{1}domain_halftime_{0}_weight_flux_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
 			# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
 			Nt = 19007
 			Nz = 3
@@ -219,7 +219,7 @@ def test_data(test_hp, csv_file = None):
 			ttest_whole = data['time'].values[:,None]
 			ztest_whole = data['depth'].values[:,None]
 			flux_whole = data['flux'].values[:,None]
-			theta_whole = data['theta'].values[:,None]
+			thetatest_whole = data['theta'].values[:,None]
 			Ktest_whole = None 
 			psitest_whole = None 
 			ttest = None
@@ -258,6 +258,12 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = rrenet.rre_model(rrenet.convert_tensor(ztest_whole),rrenet.convert_tensor(ttest_whole), rrenet.convert_tensor(flux_whole))
 		Nt = 19007
 		Nz = 3
+		diff =theta_pred-thetatest_whole 
+		print(np.sum(diff[0:1000]**2))
+		input()
+		fig,ax = plt.subplots(2,1)
+		ax[0,0].plot(diff[0:19007])
+		plt.show()
 		# Nt = int(test_hp['T']/test_hp['dt'])+1
 		# Nz = int(test_hp['Z']/test_hp['dz'])
 		# array_data = []
