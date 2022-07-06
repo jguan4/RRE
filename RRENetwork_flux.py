@@ -159,7 +159,7 @@ class RRENetwork_flux(RRENetwork):
 					self.Nt = 251
 					self.Nz = int(np.absolute(self.lb.numpy()[0])*10/20)
 				elif self.training_hp['csv_file'] == 'test_plot_data.csv':
-					Nt = 19007
+					Nt = 19006
 					Nz = 3
 					data = pd.read_csv('./'+self.training_hp['csv_file'] )
 					t = data['time'].values[:,None]

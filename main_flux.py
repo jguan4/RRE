@@ -3,6 +3,9 @@ from RRETestProblem import RRETestProblem
 import pandas as pd
 import numpy as np
 import os
+# from tkinter import *
+# import matplotlib
+# matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -125,9 +128,9 @@ def load_data(training_hp, csv_file = None):
 			boundary_data = {'top':{'z':ztb, 't':ttb, 'flux':fluxtb, 'data':fluxtb, 'type':'flux'}, 'bottom':{'z':zbb, 't':tbb, 'flux':fluxbb, 'data':psibb, 'type':'psi'}}
 
 		elif csv_file == 'test_plot_data.csv':
-			EnvFolder = "./RRE_testplot_{1}domain_halftime_{0}_weight_flux_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
+			EnvFolder = "./RRE_testplot_{1}domain_halftime_{0}_weight_fluxc_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
 			# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
-			Nt = 19007
+			Nt = 19006
 			Nz = 3
 			weights = training_hp['weights']
 			add_tag = "_f{0}_flux{2}_theta{1}".format(weights[1], weights[2], weights[3])
@@ -135,7 +138,7 @@ def load_data(training_hp, csv_file = None):
 				weight_tag = ''
 			else:
 				weight_tag = "_weight{0}".format(weights[0])
-			DataFolder = EnvFolder+"/Nt{0}_Nz{1}_noise{2}{3}{4}{5}".format(Nt,Nz,training_hp['noise'],training_hp['norm'], weight_tag,add_tag)
+			DataFolder = EnvFolder+"/Nt{0}_Nz{1}_noise{2}{3}{4}{5}".format(Nt+1,Nz,training_hp['noise'],training_hp['norm'], weight_tag,add_tag)
 
 			if not os.path.exists(EnvFolder):
 				os.makedirs(EnvFolder)
@@ -251,19 +254,27 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 
 	elif train_toggle == 'test':
 		rrenet.load_model()
+		Nt = 19006
+		Nz = 3
 
 		ztest_whole, ttest_whole, flux_whole, thetatest_whole, Ktest_whole, psitest_whole, ttest, ztest, fluxtest, psitest, Ktest, thetatest = test_data(test_hp, csv_file)
 
+		zt, tt, fluxt, thetat = extract_data_timewise([ztest_whole,ttest_whole,flux_whole,thetatest_whole],Nt = Nt, Nz = Nz, Ns = 0, Ne = int(Nt)+1, Ni = 1)
 		# psi_pred, K_pred, theta_pred = rrenet.predict(ztest_whole, ttest_whole)
-		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = rrenet.rre_model(rrenet.convert_tensor(ztest_whole),rrenet.convert_tensor(ttest_whole), rrenet.convert_tensor(flux_whole))
-		Nt = 19007
-		Nz = 3
-		diff =theta_pred-thetatest_whole 
-		print(np.sum(diff[0:1000]**2))
-		input()
+		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = rrenet.rre_model(rrenet.convert_tensor(zt),rrenet.convert_tensor(tt), rrenet.convert_tensor(fluxt))
+		diff =np.absolute(theta_pred-thetat)
+		diff_mat = np.reshape(diff, [int(Nt), Nz])
+		fluxt_mat = np.reshape(fluxt, [int(Nt), Nz])
+		tt_mat = np.reshape(tt, [int(Nt), Nz])
+		# print(np.sum(thetat**2))
 		fig,ax = plt.subplots(2,1)
-		ax[0,0].plot(diff[0:19007])
+		ax[0].plot(tt_mat[:,0],diff_mat[:,0])
+		ax[0].plot(tt_mat[:,0],diff_mat[:,1])
+		ax[0].plot(tt_mat[:,0],diff_mat[:,2])
+		ax[1].plot(tt_mat[:,0],fluxt_mat[:,0])
 		plt.show()
+		
+		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = rrenet.rre_model(rrenet.convert_tensor(ztest_whole),rrenet.convert_tensor(ttest_whole), rrenet.convert_tensor(flux_whole))
 		# Nt = int(test_hp['T']/test_hp['dt'])+1
 		# Nz = int(test_hp['Z']/test_hp['dz'])
 		# array_data = []
@@ -353,7 +364,7 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 		# plt.show()
 
 
-train_toggle = 'test'
+train_toggle = 'train'
 starting_epoch = 0
 name = 'Test1'
 # csv_file = None 
