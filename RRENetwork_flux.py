@@ -158,10 +158,13 @@ class RRENetwork_flux(RRENetwork):
 					self.fluxtest = self.flux_function(self.ttest)
 					self.Nt = 251
 					self.Nz = int(np.absolute(self.lb.numpy()[0])*10/20)
-				elif self.training_hp['csv_file'] == 'test_plot_data.csv':
-					Nt = 19006
-					Nz = 3
+				elif 'test_plot' in self.training_hp['csv_file']:
+					name = self.training_hp['csv_file'].split('.')[0]
+					subfix = name.replace('test_plot_data','')
 					data = pd.read_csv('./'+self.training_hp['csv_file'] )
+					
+					Nz = 3
+					Nt = int(len(data)/Nz)
 					t = data['time'].values[:,None]
 					z = data['depth'].values[:,None]
 					flux = data['flux'].values[:,None]
@@ -182,7 +185,7 @@ class RRENetwork_flux(RRENetwork):
 					self.tres = T*np.ones(self.zres.shape)
 					self.fluxres = self.fluxtest[0]*np.ones(self.zres.shape)
 
-					tbdata = pd.read_csv('./test_plot_tb.csv')
+					tbdata = pd.read_csv('./test_plot_tb'+subfix+'.csv')
 					t = tbdata['time'].values[:,None]
 					z = tbdata['depth'].values[:,None]
 					flux = tbdata['flux'].values[:,None]
@@ -193,7 +196,7 @@ class RRENetwork_flux(RRENetwork):
 						Item = np.reshape(item,[Nt,1])
 						if T is None:
 						# Items = Item[int(T/0.012),0:200]
-							Items = Item[0:int(Nt/2):8,:]
+							Items = Item[0:int(Nt/2),:]
 						else:
 							Items = Item[int(Nt/4),:]
 						Itemt = np.reshape(Items,[np.prod(Items.shape),1])

@@ -127,18 +127,22 @@ def load_data(training_hp, csv_file = None):
 			residual_data = {'z':zf, 't':tf, 'flux':fluxf}
 			boundary_data = {'top':{'z':ztb, 't':ttb, 'flux':fluxtb, 'data':fluxtb, 'type':'flux'}, 'bottom':{'z':zbb, 't':tbb, 'flux':fluxbb, 'data':psibb, 'type':'psi'}}
 
-		elif csv_file == 'test_plot_data.csv':
-			EnvFolder = "./RRE_testplot_{1}domain_halftime_{0}_weight_fluxcn_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
+		elif 'test_plot' in csv_file:
+		# elif csv_file == 'test_plot_data.csv':
+			name = csv_file.split('.')[0]
+			subfix = name.replace('test_plot_data','')
+			data = pd.read_csv('./'+csv_file)
+			EnvFolder = "./RRE_{2}_{1}domain_halftime_{0}_weight_fluxc_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]),name)
 			# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
-			Nt = 19006
 			Nz = 3
+			Nt = int(len(data)/Nz)
 			weights = training_hp['weights']
 			add_tag = "_f{0}_flux{2}_theta{1}".format(weights[1], weights[2], weights[3])
 			if weights[0] == 0:
 				weight_tag = ''
 			else:
 				weight_tag = "_weight{0}".format(weights[0])
-			DataFolder = EnvFolder+"/Nt{0}_Nz{1}_noise{2}{3}{4}{5}".format(Nt+1,Nz,training_hp['noise'],training_hp['norm'], weight_tag,add_tag)
+			DataFolder = EnvFolder+"/Nt{0}_Nz{1}_noise{2}{3}{4}{5}".format(Nt,Nz,training_hp['noise'],training_hp['norm'], weight_tag,add_tag)
 
 			if not os.path.exists(EnvFolder):
 				os.makedirs(EnvFolder)
@@ -146,29 +150,29 @@ def load_data(training_hp, csv_file = None):
 				os.makedirs(DataFolder)
 			pathname = DataFolder
 
-			data = pd.read_csv('./'+csv_file)
 			t = data['time'].values[:,None]
 			z = data['depth'].values[:,None]
 			flux = data['flux'].values[:,None]
 			theta = data['theta'].values[:,None]
-			zt, tt, fluxt, thetat = extract_data_timewise([z,t,flux,theta],Nt = Nt, Nz = Nz, Ns = 0, Ne = int(Nt/2), Ni = 8)
+			zt, tt, fluxt, thetat = extract_data_timewise([z,t,flux,theta],Nt = Nt, Nz = Nz, Ns = 0, Ne = int(Nt/2), Ni = 1)
 
-			tbdata = pd.read_csv('./test_plot_tb.csv')
+			tbdata = pd.read_csv('./test_plot_tb'+subfix+'.csv')
 			t = tbdata['time'].values[:,None]
 			z = tbdata['depth'].values[:,None]
 			flux = tbdata['flux'].values[:,None]
-			ztb, ttb, fluxtb = extract_data_timewise([z,t,flux],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt/2), Ni = 8)
+			ztb, ttb, fluxtb = extract_data_timewise([z,t,flux],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt/2), Ni = 1)
 
-			bbdata = pd.read_csv('./test_plot_bb.csv')
+			bbdata = pd.read_csv('./test_plot_bb'+subfix+'.csv')
 			t = bbdata['time'].values[:,None]
 			z = bbdata['depth'].values[:,None]
 			flux = bbdata['flux'].values[:,None]
 			psi = bbdata['psi'].values[:,None]
-			zbb, tbb, fluxbb, psibb = extract_data_timewise([z,t,flux,psi],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt/2), Ni = 8)
+			zbb, tbb, fluxbb, psibb = extract_data_timewise([z,t,flux,psi],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt/2), Ni = 1)
 
-			zs = np.linspace(-64,-1,32)
-			ts = tt[::16] 
-			fluxs = fluxt[::16] 
+			zs = np.linspace(-65,0,27)
+			zs = zs[1:-1]
+			ts = tt[::30] 
+			fluxs = fluxt[::30] 
 			Z,T = np.meshgrid(zs,ts)
 			Fluxs = np.tile(np.reshape(fluxs,[len(fluxs),1]),(1,len(zs)))
 			zf = Z.flatten()
@@ -370,15 +374,17 @@ train_toggle = 'train'
 starting_epoch = 0
 name = 'Test1'
 # csv_file = None 
-csv_file = "test_plot_data.csv" 
+csv_file = "test_plot_data_4.csv" 
 if csv_file is not None:
 	if csv_file == 'sandy_loam_nod.csv':
 		# lb = [-20,0]
 		lb = [-100,0,0]
 		ub = [0,3,1]
-	elif csv_file == 'test_plot_data.csv':
-		lb = [-65,0,-10]
-		ub = [0,198,0]
+	elif 'test_plot' in csv_file:
+		lb = [-65,0,0]
+		# lb = [-65,0,-10]
+		ub = [0,198,1]
+		# ub = [0,198,0]
 else:
 	if name == 'Test1':
 		lb = [0,0]
@@ -392,7 +398,7 @@ adam_options = {'epoch':50000}
 total_epoch = lbfgs_options['maxiter'] + adam_options['epoch']
 # 'dz': 1, 'dt': 10,'Z':40, 'T':360
 # training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1e-3, 1e2, 100, 1e-3], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
-training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1e-3, 1, 100, 1e-3], 'csv_file':csv_file, 'psi_lb':-270,'psi_ub':0, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
+training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1e-3, 1, 100, 1e0], 'csv_file':csv_file, 'psi_lb':-270,'psi_ub':0, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
 
 test_hp = {'name':'Test1', 'dz': 0.1, 'dt': .012,'Z':100, 'T':3, 'noise':0}
 
