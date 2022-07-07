@@ -5,7 +5,7 @@ import numpy as np
 import os
 from tkinter import *
 import matplotlib
-matplotlib.use('TkAgg')
+# matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -388,7 +388,7 @@ Kstruct = {'layers':[1,40,40,40,1],'toggle':'MNN'}
 thetastruct = {'layers':[1,40,1],'toggle':'MNN'} 
 # data = np.genfromtxt(dataname+'.csv',delimiter=',')
 lbfgs_options={'disp': None, 'maxcor': 50, 'ftol': 2.220446049250313e-16, 'gtol': 1e-09, 'maxfun': 50000, 'maxiter': 50000, 'maxls': 50, 'iprint':1}
-adam_options = {'epoch':10000}
+adam_options = {'epoch':50000}
 total_epoch = lbfgs_options['maxiter'] + adam_options['epoch']
 # 'dz': 1, 'dt': 10,'Z':40, 'T':360
 # training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1e-3, 1e2, 100, 1e-3], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
