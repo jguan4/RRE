@@ -132,7 +132,7 @@ def load_data(training_hp, csv_file = None):
 			name = csv_file.split('.')[0]
 			subfix = name.replace('test_plot_data','')
 			data = pd.read_csv('./'+csv_file)
-			EnvFolder = "./RRE_{2}_{1}domain_halftime_{0}_weight_fluxc_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]),name)
+			EnvFolder = "./RRE_{2}_{1}domain_fulltime_{0}_weight_fluxc_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]),name)
 			# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
 			Nz = 3
 			Nt = int(len(data)/Nz)
@@ -154,20 +154,20 @@ def load_data(training_hp, csv_file = None):
 			z = data['depth'].values[:,None]
 			flux = data['flux'].values[:,None]
 			theta = data['theta'].values[:,None]
-			zt, tt, fluxt, thetat = extract_data_timewise([z,t,flux,theta],Nt = Nt, Nz = Nz, Ns = 0, Ne = int(Nt/2), Ni = 1)
+			zt, tt, fluxt, thetat = extract_data_timewise([z,t,flux,theta],Nt = Nt, Nz = Nz, Ns = 0, Ne = int(Nt), Ni = 2)
 
 			tbdata = pd.read_csv('./test_plot_tb'+subfix+'.csv')
 			t = tbdata['time'].values[:,None]
 			z = tbdata['depth'].values[:,None]
 			flux = tbdata['flux'].values[:,None]
-			ztb, ttb, fluxtb = extract_data_timewise([z,t,flux],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt/2), Ni = 1)
+			ztb, ttb, fluxtb = extract_data_timewise([z,t,flux],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt), Ni = 2)
 
 			bbdata = pd.read_csv('./test_plot_bb'+subfix+'.csv')
 			t = bbdata['time'].values[:,None]
 			z = bbdata['depth'].values[:,None]
 			flux = bbdata['flux'].values[:,None]
 			psi = bbdata['psi'].values[:,None]
-			zbb, tbb, fluxbb, psibb = extract_data_timewise([z,t,flux,psi],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt/2), Ni = 1)
+			zbb, tbb, fluxbb, psibb = extract_data_timewise([z,t,flux,psi],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt), Ni = 2)
 
 			zs = np.linspace(-65,0,27)
 			zs = zs[1:-1]
@@ -221,7 +221,7 @@ def test_data(test_hp, csv_file = None):
 
 			ztest, ttest, thetatest, Ktest, psitest = extract_data_test(t, z, theta, K, psi, T = 0.6)
 			fluxtest = flux_function(ttest)
-		elif csv_file == 'test_plot_data.csv':
+		elif 'test_plot' in csv_file:
 			data = pd.read_csv('./'+csv_file)
 			ttest_whole = data['time'].values[:,None]
 			ztest_whole = data['depth'].values[:,None]
@@ -258,10 +258,10 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 
 	elif train_toggle == 'test':
 		rrenet.load_model()
-		Nt = 19006
-		Nz = 3
 
 		ztest_whole, ttest_whole, flux_whole, thetatest_whole, Ktest_whole, psitest_whole, ttest, ztest, fluxtest, psitest, Ktest, thetatest = test_data(test_hp, csv_file)
+		Nz = 3
+		Nt = int(len(ztest_whole)/Nz)
 
 		zt, tt, fluxt, thetat = extract_data_timewise([ztest_whole,ttest_whole,flux_whole,thetatest_whole],Nt = Nt, Nz = Nz, Ns = 0, Ne = int(Nt)+1, Ni = 1)
 		# psi_pred, K_pred, theta_pred = rrenet.predict(ztest_whole, ttest_whole)
@@ -398,7 +398,7 @@ adam_options = {'epoch':50000}
 total_epoch = lbfgs_options['maxiter'] + adam_options['epoch']
 # 'dz': 1, 'dt': 10,'Z':40, 'T':360
 # training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1e-3, 1e2, 100, 1e-3], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
-training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1e-3, 1, 100, 1e0], 'csv_file':csv_file, 'psi_lb':-270,'psi_ub':0, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
+training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1e-1, 1, 100, 1e1], 'csv_file':csv_file, 'psi_lb':-270,'psi_ub':0, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
 
 test_hp = {'name':'Test1', 'dz': 0.1, 'dt': .012,'Z':100, 'T':3, 'noise':0}
 
