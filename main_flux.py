@@ -27,6 +27,15 @@ def extract_data_timewise(data, Nt = 251, Nz = 1001, Ns = 10, Ne = 200, Ni = 20)
 		train_data.append(Itemt)
 	return train_data
 
+def extract_data_time_space(data, Nt = 251, Nz = 1001, Ns = 10, Ne = 200, Ni = 20, Nst = 0, Net = 251, Nit = 1):
+	train_data = []
+	for item in data:
+		Item = np.reshape(item,[Nt,Nz])
+		Items = Item[Nst:Net:Nit,Ns:Ne:Ni]
+		Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+		train_data.append(Itemt)
+	return train_data
+
 def flux_function(t, toggle = 'Bandai1'):
 	flux = np.zeros(t.shape)
 	if toggle == 'Bandai1':
@@ -86,7 +95,7 @@ def psi_func(theta):
 def load_data(training_hp, csv_file = None):
 	if csv_file is not None:
 		if csv_file == 'sandy_loam_nod.csv':
-			EnvFolder = "./RRE_Bandai_{1}domain_{0}_weight_flux_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
+			EnvFolder = "./RRE_Bandai_{1}domain_{0}_weight_flux_halftimetheta_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
 			# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
 			Nt = int(training_hp['T']/training_hp['dt'])
 			Nz = int(training_hp['Z']/training_hp['dz'])+1
@@ -113,7 +122,8 @@ def load_data(training_hp, csv_file = None):
 			theta = data['theta'].values[:,None]
 			flux = data['flux'].values[:,None]
 			zt, tt, thetat = extract_data([z,t,theta])
-			zf, tf, thetaf = extract_data([z,t,theta], Ne = np.absolute(training_hp['lb'][0])*10, Ni = 10)
+			zf, tf, thetaf = extract_data_time_space([z,t,theta], Nt = 251, Nz = 1001, Ns = 10, Ne = 1001, Ni = 10, Nst = 0, Net = 125, Nit = 1)
+			# extract_data([z,t,theta], Ne = np.absolute(training_hp['lb'][0])*10, Ni = 10)
 			ztb, ttb, fluxtb = extract_top_boundary([z,t,flux])
 			zbb, tbb, psibb = extract_bottom_boundary([z,t,psi], Nb = np.absolute(training_hp['lb'][0])*10)
 
@@ -258,8 +268,8 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 
 	elif train_toggle == 'test':
 		rrenet.load_model()
-		Nt = 19006
-		Nz = 3
+		# Nt = 19006
+		# Nz = 3
 
 		ztest_whole, ttest_whole, flux_whole, thetatest_whole, Ktest_whole, psitest_whole, ttest, ztest, fluxtest, psitest, Ktest, thetatest = test_data(test_hp, csv_file)
 
@@ -334,15 +344,15 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 		# axs1[2,1].set(xlabel='z', ylabel='f')
 		# # plt.show()
 
-		# order_str = ['theta','K','psi']
-		# for (ostr,data, pred) in zip(order_str,[thetatest_whole, Ktest_whole, psitest_whole], [theta_pred,K_pred,psi_pred]):
-		# 	err = relative_error(data,pred)
-		# 	print("For {0}, relative error is {1}.\n".format(ostr,err))
-
-		order_str = ['theta']
-		for (ostr,data, pred) in zip(order_str,[thetatest_whole], [theta_pred]):
+		order_str = ['theta','K','psi']
+		for (ostr,data, pred) in zip(order_str,[thetatest_whole, Ktest_whole, psitest_whole], [theta_pred,K_pred,psi_pred]):
 			err = relative_error(data,pred)
 			print("For {0}, relative error is {1}.\n".format(ostr,err))
+
+		# order_str = ['theta']
+		# for (ostr,data, pred) in zip(order_str,[thetatest_whole], [theta_pred]):
+		# 	err = relative_error(data,pred)
+		# 	print("For {0}, relative error is {1}.\n".format(ostr,err))
 
 		# psi_pred, K_pred, theta_pred = rrenet.predict(ztest,ttest)
 
@@ -370,8 +380,8 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 		# plt.show()
 
 
-train_toggle = 'retrain'
-starting_epoch = 65464
+train_toggle = 'train'
+starting_epoch = 0
 name = 'Test1'
 # csv_file = None 
 csv_file = "sandy_loam_nod.csv" 
@@ -394,7 +404,7 @@ Kstruct = {'layers':[1,40,40,40,1],'toggle':'MNN'}
 thetastruct = {'layers':[1,40,1],'toggle':'MNN'} 
 # data = np.genfromtxt(dataname+'.csv',delimiter=',')
 lbfgs_options={'disp': None, 'maxcor': 50, 'ftol': 2.220446049250313e-16, 'gtol': 1e-09, 'maxfun': 50000, 'maxiter': 50000, 'maxls': 50, 'iprint':1}
-adam_options = {'epoch':1000}
+adam_options = {'epoch':10000}
 total_epoch = lbfgs_options['maxiter'] + adam_options['epoch']
 # 'dz': 1, 'dt': 10,'Z':40, 'T':360
 training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1, 1, 500, 1], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}

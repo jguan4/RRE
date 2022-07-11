@@ -710,6 +710,8 @@ class KOutput(tf.keras.layers.Layer):
 
 	def call(self, inputs):
 		return tf.math.exp((tf.matmul(inputs, self.kernel) + self.bias))
+		# ten = tf.constant(10,dtype = tf.float64)
+		# return tf.math.pow(ten,(tf.matmul(inputs, self.kernel) + self.bias))
 
 	def get_config(self):
 		return {"units": self.units}

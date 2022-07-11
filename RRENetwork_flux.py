@@ -74,9 +74,30 @@ class RRENetwork_flux(RRENetwork):
 			self.loss_log[1].append(loss.numpy())
 		return loss
 
-	def loss_residual(self, residual_data, log = False):
+	def loss_residual(self, residual_data, log = False, batch = False):
 		_, _, _, f_pred, _, _ = self.rre_model(residual_data['z'], residual_data['t'], residual_data['flux'])
 		loss = self.loss_f(f_pred)
+		if log:
+			self.loss_log[2].append(loss.numpy())
+		return loss
+
+	def loss_residual_batch(self, residual_data, log = False, batch = 5000):
+		N = len(residual_data['z'])
+		if N>batch:
+			numbatch = int(np.ceil(N/batch))
+			loss = 0.0
+			for i in range(numbatch):
+				startind = i*batch
+				endind = tf.math.minimum((i+1)*batch,N)
+				zb = residual_data['z'][startind:endind]
+				tb = residual_data['t'][startind:endind]
+				fluxb = residual_data['flux'][startind:endind]
+				_, _, _, f_pred, _, _ = self.rre_model(zb, tb, fluxb)
+				lossb = self.loss_f(f_pred)
+				loss = loss + lossb 
+		else:
+			_, _, _, f_pred, _, _ = self.rre_model(residual_data['z'], residual_data['t'], residual_data['flux'])
+			loss = self.loss_f(f_pred)
 		if log:
 			self.loss_log[2].append(loss.numpy())
 		return loss
