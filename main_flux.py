@@ -132,7 +132,7 @@ def load_data(training_hp, csv_file = None):
 			name = csv_file.split('.')[0]
 			subfix = name.replace('test_plot_data','')
 			data = pd.read_csv('./'+csv_file)
-			EnvFolder = "./RRE_{2}_{1}domain_fulltime_{0}_weight_fluxc_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]),name)
+			EnvFolder = "./RRE_{2}_{1}domain_fulltime_secondhalftheta_{0}_weight_fluxc_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]),name)
 			# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
 			Nz = 3
 			Nt = int(len(data)/Nz)
@@ -154,25 +154,25 @@ def load_data(training_hp, csv_file = None):
 			z = data['depth'].values[:,None]
 			flux = data['flux'].values[:,None]
 			theta = data['theta'].values[:,None]
-			zt, tt, fluxt, thetat = extract_data_timewise([z,t,flux,theta],Nt = Nt, Nz = Nz, Ns = 0, Ne = int(Nt), Ni = 2)
+			zt, tt, fluxt, thetat = extract_data_timewise([z,t,flux,theta],Nt = Nt, Nz = Nz, Ns = int(Nt/2), Ne = int(Nt), Ni = 1)
 
 			tbdata = pd.read_csv('./test_plot_tb'+subfix+'.csv')
 			t = tbdata['time'].values[:,None]
 			z = tbdata['depth'].values[:,None]
 			flux = tbdata['flux'].values[:,None]
-			ztb, ttb, fluxtb = extract_data_timewise([z,t,flux],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt), Ni = 2)
+			ztb, ttb, fluxtb = extract_data_timewise([z,t,flux],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt), Ni = 1)
 
 			bbdata = pd.read_csv('./test_plot_bb'+subfix+'.csv')
 			t = bbdata['time'].values[:,None]
 			z = bbdata['depth'].values[:,None]
 			flux = bbdata['flux'].values[:,None]
 			psi = bbdata['psi'].values[:,None]
-			zbb, tbb, fluxbb, psibb = extract_data_timewise([z,t,flux,psi],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt), Ni = 2)
+			zbb, tbb, fluxbb, psibb = extract_data_timewise([z,t,flux,psi],Nt = Nt, Nz = 1, Ns = 0, Ne = int(Nt), Ni = 1)
 
 			zs = np.linspace(-65,0,27)
 			zs = zs[1:-1]
-			ts = tt[::30] 
-			fluxs = fluxt[::30] 
+			ts = t[::30] 
+			fluxs = flux[::30] 
 			Z,T = np.meshgrid(zs,ts)
 			Fluxs = np.tile(np.reshape(fluxs,[len(fluxs),1]),(1,len(zs)))
 			zf = Z.flatten()
