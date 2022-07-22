@@ -1,0 +1,2 @@
+Epoch, l_theta, l_f, l_top, l_bottom, weight_theta, weight_f, weight_flux, weight_psi
+10000, 7.651539295421605e-06, 0.0028915373423527447, 0.00024091229319412723, 7.434587825604289e-05, 500.0, 1.0, 1.0, 1.0

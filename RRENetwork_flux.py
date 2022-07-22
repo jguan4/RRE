@@ -19,11 +19,19 @@ from mpl_toolkits.mplot3d import Axes3D
 from RRETestProblem import RRETestProblem
 from RRENetwork import *
 from matplotlib.backends.backend_pdf import PdfPages
+physical_devices = tf.config.list_physical_devices('GPU')
+try:
+  tf.config.experimental.set_memory_growth(physical_devices[0], True)
+except:
+  # Invalid device or cannot modify virtual devices once initialized.
+  pass
+from utils import *
 
 class RRENetwork_flux(RRENetwork):
 	def __init__(self, psistruct, Kstruct, thetastruct, training_hp, pathname):
 		super().__init__(psistruct, Kstruct, thetastruct, training_hp, pathname)
 
+	# @tf.function
 	def rre_model(self, z_tf, t_tf, flux_tf):
 
 		with tf.GradientTape(persistent=True) as tape:
@@ -41,6 +49,7 @@ class RRENetwork_flux(RRENetwork):
 
 			# Getting the prediction
 			psi = self.Psi.net(X_f)
+			# psi = -psiout
 
 			log_h = tf.math.log(-psi)
 			theta = self.Theta.net(-log_h)
@@ -58,6 +67,7 @@ class RRENetwork_flux(RRENetwork):
 		flux_z = tape.gradient(flux, z_tf)
 		f_residual = theta_t + flux_z
 		flux_residual = flux-flux_tf
+		del tape
 
 		# f_residual =  theta_t - K_z*psi_z- K*psi_zz - K_z
 
@@ -74,14 +84,14 @@ class RRENetwork_flux(RRENetwork):
 			self.loss_log[1].append(loss.numpy())
 		return loss
 
-	def loss_residual(self, residual_data, log = False, batch = False):
+	def loss_residual(self, residual_data, log = False):
 		_, _, _, f_pred, _, _ = self.rre_model(residual_data['z'], residual_data['t'], residual_data['flux'])
 		loss = self.loss_f(f_pred)
 		if log:
 			self.loss_log[2].append(loss.numpy())
 		return loss
 
-	def loss_residual_batch(self, residual_data, log = False, batch = 5000):
+	def loss_residual_batch(self, residual_data, log = False, batch = 4096):
 		N = len(residual_data['z'])
 		if N>batch:
 			numbatch = int(np.ceil(N/batch))
@@ -142,47 +152,26 @@ class RRENetwork_flux(RRENetwork):
 		if epoch == self.tf_epochs or epoch-self.starting_epoch == 0:
 			if self.training_hp['csv_file'] is not None:
 				if self.training_hp['csv_file'] == 'sandy_loam_nod.csv':
+					[t,z,psi,K,C,theta,flux] = load_csv_data(self.training_hp['csv_file'])
 
-					data = pd.read_csv('./'+self.training_hp['csv_file'])
-					t = data['time'].values[:,None]
-					z = data['depth'].values[:,None]
-					psi = data['head'].values[:,None]
-					K = data['K'].values[:,None]
-					C = data['C'].values[:,None]
-					theta = data['theta'].values[:,None]
-					flux = data['flux'].values[:,None]
-					test_data = []
 					T = None
-					for item in [z,t,theta, K, psi]:
-						Item = np.reshape(item,[251,1001])
-						if T is None:
-						# Items = Item[int(T/0.012),0:200]
-							Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
-						else:
-							Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
-						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-						test_data.append(Itemt)
-					self.ztest_whole, self.ttest_whole, self.thetatest_whole, self.Ktest_whole, self.psitest_whole = test_data
-					self.flux_whole = self.flux_function(self.ttest_whole)
-					test_data = []
-					T = 0.6
-					for item in [z,t,theta, K, psi]:
-						Item = np.reshape(item,[251,1001])
-						if T is None:
-						# Items = Item[int(T/0.012),0:200]
-							Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
-						else:
-							Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
-						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-						test_data.append(Itemt)
-					self.ztest, self.ttest, self.thetatest, self.Ktest, self.psitest = test_data
-					self.fluxtest = self.flux_function(self.ttest)
+					self.test_data_whole = extract_data_test([z,t,theta, K, psi], T = T, )
+					self.test_data_whole.append(flux_function(self.test_data_whole[1]))
+
+					plot_Ts = [0.1,0.6,1.5,1.6,2.2,2.6]
+					self.plot_test_datas = []
+					for i in range(len(plot_Ts)):
+						T = plot_Ts[i]
+						test_data = extract_data_test([z,t,theta, K, psi], T = T)
+						test_data.append(flux_function(test_data[1]))
+						self.plot_test_datas.append(test_data)
+
 					self.Nt = 251
-					self.Nz = int(np.absolute(self.lb.numpy()[0])*10/20)
+					self.Nz = int(np.absolute(self.lb.numpy()[0])*10/20)+1
 
 					self.tflux = np.reshape(t,[251,1001])[:,[0]]
 					self.zflux = np.zeros(self.tflux.shape)
-					self.fluxflux = self.flux_function(self.tflux)
+					self.fluxflux = flux_function(self.tflux)
 				elif 'test_plot' in self.training_hp['csv_file']:
 					name = self.training_hp['csv_file'].split('.')[0]
 					subfix = name.replace('test_plot_data','')
@@ -228,39 +217,29 @@ class RRENetwork_flux(RRENetwork):
 						flux_test_data.append(Itemt)
 					self.zflux, self.tflux, self.fluxflux = flux_test_data
 
-			else:
-				test_env = RRETestProblem(self.training_hp['dt'], self.training_hp['dz'], self.training_hp['T'], self.training_hp['Z'],self.training_hp['noise'], self.training_hp['name'],'')
-				self.ttest_whole, self.ztest_whole, self.psitest_whole, self.Ktest_whole, self.thetatest_whole = test_env.get_training_data()
-
-				test_env = RRETestProblem(self.training_hp['dt'], self.training_hp['dz'], 70, self.training_hp['Z'],self.training_hp['noise'], self.training_hp['name'],'')
-				self.ttest, self.ztest, self.psitest, self.Ktest, self.thetatest = test_env.get_testing_data()
-				self.Nt = int(self.training_hp['T']/self.training_hp['dt'])
-				self.Nz = int(self.training_hp['Z']/self.training_hp['dz'])+1
-
 			self.array_data = []
 
-			for item in [self.ztest_whole, self.ttest_whole, self.thetatest_whole, self.Ktest_whole, self.psitest_whole, self.flux_whole]:
+			for item in self.test_data_whole:
 				Item = np.reshape(item,[self.Nt,self.Nz])
 				self.array_data.append(Item)
 
-			self.thetat_dis = (self.array_data[2][1:,:]-self.array_data[2][:-1,:])/self.training_hp['dt']
-			self.psiz_dis = -(self.array_data[4][:,1:]-self.array_data[4][:,:-1])/self.training_hp['dz']
-			self.psit_dis = (self.array_data[4][1:,:]-self.array_data[4][:-1,:])/self.training_hp['dt']
-			self.Kz_dis = -(self.array_data[3][:,1:]-self.array_data[3][:,:-1])/self.training_hp['dz']
-			self.psizz_dis = (self.psiz_dis[:,1:]-self.psiz_dis[:,:-1])/self.training_hp['dz']
-			self.flux_dis = (self.array_data[5][1:,:]-self.array_data[5][:-1,:])/self.training_hp['dt']
+			dt = self.training_hp['dt']
+			dz = 2
+			self.thetat_dis = (self.array_data[2][1:,:]-self.array_data[2][:-1,:])/dt
+			self.psiz_dis = -(self.array_data[4][:,1:]-self.array_data[4][:,:-1])/dz
+			self.psit_dis = (self.array_data[4][1:,:]-self.array_data[4][:-1,:])/dt
+			self.Kz_dis = -(self.array_data[3][:,1:]-self.array_data[3][:,:-1])/dz
+			self.psizz_dis = (self.psiz_dis[:,1:]-self.psiz_dis[:,:-1])/dz
+			self.flux_dis = (self.array_data[5][1:,:]-self.array_data[5][:-1,:])/dt
 			self.f_dis =  self.thetat_dis[:,1:-1] - self.Kz_dis[1:,1:]*self.psiz_dis[1:,1:]- (self.array_data[3][1:,1:-1])*self.psizz_dis[1:,:] - self.Kz_dis[1:,1:]
 
 		array_data_temp = []
 
-		psi_pred, K_pred, theta_pred, f_residual, _, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = self.rre_model(self.convert_tensor(self.ztest_whole),self.convert_tensor(self.ttest_whole), self.convert_tensor(self.flux_whole))
+		psi_pred, K_pred, theta_pred, f_residual, _, [psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual] = self.rre_model(self.convert_tensor(self.test_data_whole[0]),self.convert_tensor(self.test_data_whole[1]), self.convert_tensor(self.test_data_whole[-1]))
 		for item in [f_residual, psi_z, psi_t, theta_t, K_z, psi_zz, flux_residual]:
 			Item = np.reshape(item,[self.Nt,self.Nz])
 			array_data_temp.append(Item)
 
-		psi_pred, K_pred, theta_pred = self.predict(self.ztest,self.ttest,self.fluxtest)
-		# _, _, theta_pred, _, _, _ = self.rre_model(self.convert_tensor(self.ztest),self.convert_tensor(self.ttest),self.convert_tensor(self.fluxtest))
-		# _, _, _, f_residual, _, _ = self.rre_model(self.convert_tensor(self.zres),self.convert_tensor(self.tres),self.convert_tensor(self.fluxres))
 		_, _, _, _, flux, [_, _, _, _, _, flux_residual] = self.rre_model(self.convert_tensor(self.zflux),self.convert_tensor(self.tflux),self.convert_tensor(self.fluxflux))
 
 		fig1, axs1 = plt.subplots(4, 2)
@@ -296,70 +275,65 @@ class RRENetwork_flux(RRENetwork):
 
 		# f
 		axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.array_data[0][6,1:-1].shape), 'b-')
-		# axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
 		axs1[2,1].plot(self.array_data[0][6,1:-1], array_data_temp[0][6,1:-1], 'ro--')
 		axs1[2,1].set_title('f vs z')
 		axs1[2,1].set(xlabel='z', ylabel='f')
 		fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
 
+		# flux
 		axs1[3,0].plot(self.tflux, self.fluxflux, 'b-')
-		# axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
 		axs1[3,0].plot(self.tflux, flux, 'r--')
 		axs1[3,0].set_title('flux vs z')
 		axs1[3,0].set(xlabel='z', ylabel='flux')
 
+		# flux residual
 		axs1[3,1].plot(self.tflux, np.zeros(self.tflux.shape), 'b-')
-		# axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
 		axs1[3,1].plot(self.tflux, flux_residual, 'ro--')
 		axs1[3,1].set_title('flux residual vs z')
 		axs1[3,1].set(xlabel='z', ylabel='flux f')
 
 		fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
-		# plt.show()
 
-		# order_str = ['theta','K','psi']
-		# for (ostr,data, pred) in zip(order_str,[thetatest_whole, Ktest_whole, psitest_whole], [theta_pred,K_pred,psi_pred]):
-		# 	err = relative_error(data,pred)
-		# 	print("For {0}, relative error is {1}.\n".format(ostr,err))
+		for i in range(len(self.plot_test_datas)):
+			test_data = self.plot_test_datas[i]
+			ztest = test_data[0]
+			ttest = test_data[1]
+			thetatest = test_data[2]
+			Ktest = test_data[3]
+			psitest = test_data[4]
+			fluxtest = test_data[5]
+			psi_pred, K_pred, theta_pred, f_residual, flux_pred, [_, _, _, _, _, flux_residual] = self.rre_model(self.convert_tensor(ztest),self.convert_tensor(ttest),self.convert_tensor(fluxtest))
+			fig, axs = plt.subplots(3, 2)
+			axs[0,0].plot(ztest, theta_pred, 'ro--')
+			axs[0,0].plot(ztest, thetatest, 'b-')
+			axs[0,0].set_title('Theta vs z')
+			axs[0,0].set(xlabel='z', ylabel='theta')
 
-		# psi_pred, K_pred, theta_pred = rrenet.predict(ztest,ttest)
+			axs[0,1].semilogy(ztest, K_pred, 'ro--')
+			axs[0,1].semilogy(ztest, Ktest, 'b-')
+			axs[0,1].set_title('K vs z')
+			axs[0,1].set(xlabel='z', ylabel='K')
 
-		fig, axs = plt.subplots(2, 2)
-		axs[0,0].plot(self.ztest, theta_pred, 'ro--')
-		axs[0,0].plot(self.ztest, self.thetatest, 'b-')
-		axs[0,0].set_title('Theta vs z')
-		axs[0,0].set(xlabel='z', ylabel='theta')
+			axs[1,0].plot(ztest, psi_pred, 'ro--')
+			axs[1,0].plot(ztest, psitest, 'b-')
+			axs[1,0].set_title('Psi vs z')
+			axs[1,0].set(xlabel='z', ylabel='psi')
 
-		# axs[0,1].plot(self.zres, np.zeros(self.zres.shape), 'b-')
-		# # axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
-		# axs[0,1].plot(self.zres, f_residual, 'ro--')
-		# axs[0,1].set_title('f vs z')
-		# axs[0,1].set(xlabel='z', ylabel='f')
+			axs[1,1].plot(psi_pred, theta_pred, 'ro--')
+			axs[1,1].plot(psitest, thetatest, 'b-')
+			axs[1,1].set_title('Theta vs Psi')
+			axs[1,1].set(xlabel='psi', ylabel='theta')
 
-		# axs[1,0].plot(self.tflux, np.zeros(self.tflux.shape), 'b-')
-		# # axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
-		# axs[1,0].plot(self.tflux, flux_residual, 'ro--')
-		# axs[1,0].set_title('flux_residual vs z')
-		# axs[1,0].set(xlabel='t', ylabel='flux f')
-		# fig.suptitle("epoch {0}, T = {1}".format(epoch,self.ttest[0,0]), fontsize=16)
+			axs[2,0].plot(ztest, f_residual, 'ro--')
+			axs[2,0].plot(ztest, np.zeros(ztest.shape), 'b-')
+			axs[2,0].set_title('z vs residual')
+			axs[2,0].set(xlabel='z', ylabel='f')
 
-		axs[0,1].semilogy(self.ztest, K_pred, 'ro--')
-		axs[0,1].semilogy(self.ztest, self.Ktest, 'b-')
-		axs[0,1].set_title('K vs z')
-		axs[0,1].set(xlabel='z', ylabel='K')
+			axs[2,1].plot(ztest, flux_pred, 'ro--')
+			axs[2,1].set_title('z vs flux')
+			axs[2,1].set(xlabel='z', ylabel='q')
+			fig.suptitle("T = {0}".format(ttest[0,0]), fontsize=16)
 
-		axs[1,0].plot(self.ztest, psi_pred, 'ro--')
-		axs[1,0].plot(self.ztest, self.psitest, 'b-')
-		axs[1,0].set_title('Psi vs z')
-		axs[1,0].set(xlabel='z', ylabel='psi')
-
-		axs[1,1].plot(psi_pred, theta_pred, 'ro--')
-		axs[1,1].plot(self.psitest, self.thetatest, 'b-')
-		axs[1,1].set_title('Theta vs Psi')
-		axs[1,1].set(xlabel='psi', ylabel='theta')
-		fig.suptitle("T = {0}".format(self.ttest[0,0]), fontsize=16)
-
-		# plt.show()
 		filename = "{1}/epoch_{0}.pdf".format(epoch,self.pathname)
 		pp = PdfPages(filename)
 		fig_nums = plt.get_fignums()
@@ -368,16 +342,14 @@ class RRENetwork_flux(RRENetwork):
 			fig.savefig(pp, format='pdf')
 		pp.close()
 		plt.close('all')
-		
-		# self.save_multi_image(filename)
-		# plt.savefig('my_plot.png')
+
 
 	def flux_function(self, t, toggle = 'Bandai1'):
 		flux = np.zeros(t.shape)
 		if toggle == 'Bandai1':
-			flux[np.argwhere(np.logical_and(t>=0,t<0.25))] = -10
-			flux[np.argwhere(np.logical_and(t>=0.5,t<1.0))] = 0.3
-			flux[np.argwhere(np.logical_and(t>=1.5,t<2.0))] = 0.3
-			flux[np.argwhere(np.logical_and(t>=2.0,t<2.25))] = -10
-			flux[np.argwhere(np.logical_and(t>=2.5,t<=3.0))] = 0.3
+			flux[np.argwhere(np.logical_and(t>=0,t<0.25))[:,0]] = -10
+			flux[np.argwhere(np.logical_and(t>=0.5,t<1.0))[:,0]] = 0.3
+			flux[np.argwhere(np.logical_and(t>=1.5,t<2.0))[:,0]] = 0.3
+			flux[np.argwhere(np.logical_and(t>=2.0,t<2.25))[:,0]] = -10
+			flux[np.argwhere(np.logical_and(t>=2.5,t<=3.0))[:,0]] = 0.3
 		return flux

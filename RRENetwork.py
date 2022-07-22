@@ -102,31 +102,69 @@ class RRENetwork(object):
 	# 		#+self.loss_flux(flux_pred, flux)\
 	# 	return l
 
-	def weight_scheduling(self):
+	def weight_scheduling(self, loss_theta = None):
 		if self.scheduleing_toggle == 'constant':
+			# if self.epoch > 25000:
+				# if self.epoch > 40000:
+					# return self.thetaweight, self.fweight*100, self.psiweight, self.fluxweight
+				# else:
+				# return self.thetaweight/500, self.fweight, self.psiweight, self.fluxweight
+			# else:
 			return self.thetaweight, self.fweight, self.psiweight, self.fluxweight
 		elif self.scheduleing_toggle == 'linear':
-			thetaweight = self.linear_shedule(start_weight=self.thetaweight, end_weight = self.thetaweight/10000, duration = self.total_epoch/4*3)
-			psiweight = self.psiweight
-			fweight = self.fweight
-			fluxweight = self.fluxweight
-			# fweight = self.linear_shedule(start_weight=self.fweight, end_weight = 100*self.fweight, duration = self.total_epoch/4*3)
-			return thetaweight,fweight,psiweight, fluxweight
+			if self.epoch %500 == 0:
+			# thetaweight = self.linear_shedule(start_weight=self.thetaweight, end_weight = self.thetaweight/10000, duration = self.total_epoch/4*3)
+				# thetaweight = self.thetaweight
+				# psiweight = self.psiweight
+				# fweight = self.fweight
+				# fluxweight = self.fluxweight
+				self.fweight = self.linear_shedule(start_weight=self.fweight, end_weight = self.convert_tensor(1.0), duration = self.total_epoch/4*3) #flin
+				# self.fweight = self.linear_shedule(start_weight=self.fweight, end_weight = self.convert_tensor(100.0), duration = self.total_epoch/4*3) # flin1
+			# self.fweight = self.convert_tensor(1.0)
+			return self.thetaweight,self.fweight,self.psiweight, self.fluxweight
+		elif self.scheduleing_toggle == 'exp':
+
+			if self.epoch %500 == 0:
+			# thetaweight = self.linear_shedule(start_weight=self.thetaweight, end_weight = self.thetaweight/10000, duration = self.total_epoch/4*3)
+				# thetaweight = self.thetaweight
+				# psiweight = self.psiweight
+				# fweight = self.fweight
+				# fluxweight = self.fluxweight
+				self.fweight = self.exp_schedule(start_weight=self.fweight, end_weight = self.convert_tensor(100.0), duration = self.total_epoch/4*3)
+			return self.thetaweight,self.fweight,self.psiweight, self.fluxweight
+		elif self.scheduleing_toggle == 'loss':
+			if loss_theta and loss_theta.numpy()<1e-3:
+				self.thetaweight = self.convert_tensor(1.0)
+				return self.convert_tensor(1.0), self.fweight, self.psiweight, self.fluxweight
+			else:
+				return self.thetaweight, self.fweight, self.psiweight, self.fluxweight
+		elif self.scheduleing_toggle == 'loss_constant':
+			if loss_theta and loss_theta.numpy()<5e-4:
+				self.thetaweight = self.convert_tensor(1.0)
+			return self.thetaweight, self.fweight, self.psiweight, self.fluxweight
 
 	def exp_schedule(self,start_weight,end_weight,duration):
-		passed_epoch = self.epoch-self.starting_epoch
-		y = s*np.exp(np.log(end_weight/start_weight)/duration*passed_epoch) if passed_epoch<= duration else end_weight
+		passed_epoch = self.epoch
+		y = start_weight*np.exp(np.log(end_weight/start_weight)/duration*passed_epoch) if passed_epoch<= duration else end_weight
 		return y
 
 	def linear_shedule(self, start_weight, end_weight, duration):
-		passed_epoch = self.epoch-self.starting_epoch
+		passed_epoch = self.epoch
 		y = (end_weight-start_weight)/duration*passed_epoch+start_weight if passed_epoch<= duration else end_weight
 		return y
 
-	def loss(self, theta_data, residual_data, boundary_data, log = False):
-		thetaweight, fweight, psiweight, fluxweight = self.weight_scheduling()
-		loss = self.loss_theta(theta_data, log = log)*thetaweight+fweight*self.loss_residual(residual_data, log = log)+\
-			self.loss_boundary(boundary_data, log = log)
+	def loss(self, theta_data, residual_data, boundary_data, log = False, func_residual_toggle = False):
+		# print(self.loss_theta(theta_data))
+		# print(self.loss_residual(residual_data))
+		# print(self.get_params(True))
+		# input()
+		ltheta =self.loss_theta(theta_data, log = log)
+		# lf =  self.loss_residual(residual_data, log = log, func_residual_toggle = func_residual_toggle)
+		lf =  self.loss_residual(residual_data, log = log)
+		lb = self.loss_boundary(boundary_data, log = log)
+		thetaweight, fweight, psiweight, fluxweight = self.weight_scheduling(loss_theta = ltheta)
+		loss = ltheta*thetaweight+fweight*lf+lb
+			
 		if log:
 			self.loss_log[5].append(thetaweight.numpy())
 			self.loss_log[6].append(fweight.numpy())
@@ -160,14 +198,14 @@ class RRENetwork(object):
 		psi_pred, K_pred, theta_pred, f_pred, flux_pred, [psiz_pred, psit_pred, thetat_pred, Kz_pred, psizz_pred] = self.rre_model(bound['z'], bound['t'])
 		_,_,psiweight,fluxweight = self.weight_scheduling()
 		if bound['type'] == 'flux':
-			loss = self.loss_reduce_mean(flux_pred, bound['data'])*fluxweight
+			loss = self.loss_reduce_mean(flux_pred, bound['data'])*fluxweight#+self.loss_f(f_pred)
 			if log:
 				self.loss_log[7].append(fluxweight.numpy())
 		elif bound['type'] == 'psiz':
 			loss = self.loss_reduce_mean(psiz_pred, bound['data'])
 		elif bound['type'] == 'psi':
 			# loss = self.loss_reduce_mean(psi_pred, bound['data'])
-			loss = self.loss_reduce_mean(psi_pred, bound['data'])/(self.psi_ub-self.psi_lb)**2*psiweight
+			loss = self.loss_reduce_mean(psi_pred, bound['data'])/(self.psi_ub-self.psi_lb)**2*psiweight#+self.loss_f(f_pred)
 			if log:
 				self.loss_log[8].append(psiweight.numpy())
 		return loss
@@ -179,7 +217,7 @@ class RRENetwork(object):
 
 	@tf.function
 	def loss_f(self, f):
-		l = tf.reduce_mean(tf.square(f))
+		l = tf.reduce_mean(tf.square(f)) + 1.0e-12
 		return l
 
 	# @tf.function
@@ -189,6 +227,14 @@ class RRENetwork(object):
 			# loss_boundary = self.loss_boundary(boundary_data, log = True)
 			# loss_value = loss+loss_boundary*self.psiweight
 		grads = tape.gradient(loss_value, self.wrap_trainable_variables())
+		# print(tf.math.reduce_any([tf.math.reduce_any(tf.math.is_nan(grad)) for grad in grads]))
+		# print(tf.debugging.check_numerics(grads,message='Checking grads'))
+		# input()
+		# if tf.math.reduce_any([tf.math.reduce_any(tf.math.is_nan(grad)) for grad in grads]).numpy():
+			# print(grads)
+			# with tf.GradientTape() as tape:
+				# loss_value = self.loss(theta_data, residual_data, boundary_data, log = False)
+			# grads = tape.gradient(loss_value, self.wrap_trainable_variables())
 		return loss_value, grads
 
 	def get_loss_and_flat_grad(self, theta_data, residual_data, boundary_data):
@@ -386,42 +432,93 @@ class RRENetwork(object):
 		return residual
 
 	def plotting(self,epoch):
-		if epoch == 0 or epoch == self.tf_epochs:
+		if epoch == self.tf_epochs or epoch-self.starting_epoch == 0:
 			if self.training_hp['csv_file'] is not None:
-				data = pd.read_csv('./'+self.training_hp['csv_file'])
-				t = data['time'].values[:,None]
-				z = data['depth'].values[:,None]
-				psi = data['head'].values[:,None]
-				K = data['K'].values[:,None]
-				C = data['C'].values[:,None]
-				theta = data['theta'].values[:,None]
-				flux = data['flux'].values[:,None]
-				test_data = []
-				T = None
-				for item in [z,t,theta, K, psi]:
-					Item = np.reshape(item,[251,1001])
-					if T is None:
-					# Items = Item[int(T/0.012),0:200]
-						Items = Item[:,:501:20]
-					else:
-						Items = Item[int(T/0.012),:501:20]
-					Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-					test_data.append(Itemt)
-				self.ztest_whole, self.ttest_whole, self.thetatest_whole, self.Ktest_whole, self.psitest_whole = test_data
-				test_data = []
-				T = 0.6
-				for item in [z,t,theta, K, psi]:
-					Item = np.reshape(item,[251,1001])
-					if T is None:
-					# Items = Item[int(T/0.012),0:200]
-						Items = Item[:,:500:20]
-					else:
-						Items = Item[int(T/0.012),:500:20]
-					Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-					test_data.append(Itemt)
-				self.ztest, self.ttest, self.thetatest, self.Ktest, self.psitest = test_data
-				self.Nt = 251
-				self.Nz = 26
+				if self.training_hp['csv_file'] == 'sandy_loam_nod.csv':
+
+					data = pd.read_csv('./'+self.training_hp['csv_file'])
+					t = data['time'].values[:,None]
+					z = data['depth'].values[:,None]
+					psi = data['head'].values[:,None]
+					K = data['K'].values[:,None]
+					C = data['C'].values[:,None]
+					theta = data['theta'].values[:,None]
+					flux = data['flux'].values[:,None]
+					test_data = []
+					T = None
+					for item in [z,t,theta, K, psi]:
+						Item = np.reshape(item,[251,1001])
+						if T is None:
+						# Items = Item[int(T/0.012),0:200]
+							Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
+						else:
+							Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
+						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+						test_data.append(Itemt)
+					self.ztest_whole, self.ttest_whole, self.thetatest_whole, self.Ktest_whole, self.psitest_whole = test_data
+					self.flux_whole = self.flux_function(self.ttest_whole)
+					test_data = []
+					T = 0.6
+					for item in [z,t,theta, K, psi]:
+						Item = np.reshape(item,[251,1001])
+						if T is None:
+						# Items = Item[int(T/0.012),0:200]
+							Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
+						else:
+							Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
+						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+						test_data.append(Itemt)
+					self.ztest, self.ttest, self.thetatest, self.Ktest, self.psitest = test_data
+					self.fluxtest = self.flux_function(self.ttest)
+
+					test_data = []
+					T = 0.1
+					for item in [z,t,theta, K, psi]:
+						Item = np.reshape(item,[251,1001])
+						if T is None:
+						# Items = Item[int(T/0.012),0:200]
+							Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
+						else:
+							Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
+						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+						test_data.append(Itemt)
+					self.ztest2, self.ttest2, self.thetatest2, self.Ktest2, self.psitest2 = test_data
+					self.fluxtest2 = self.flux_function(self.ttest2)
+
+					test_data = []
+					T = 2.2
+					for item in [z,t,theta, K, psi]:
+						Item = np.reshape(item,[251,1001])
+						if T is None:
+						# Items = Item[int(T/0.012),0:200]
+							Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
+						else:
+							Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
+						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+						test_data.append(Itemt)
+					self.ztest1, self.ttest1, self.thetatest1, self.Ktest1, self.psitest1 = test_data
+					self.fluxtest1 = self.flux_function(self.ttest1)
+					
+					test_data = []
+					T = 2.6
+					for item in [z,t,theta, K, psi]:
+						Item = np.reshape(item,[251,1001])
+						if T is None:
+						# Items = Item[int(T/0.012),0:200]
+							Items = Item[:,:int(np.absolute(self.lb.numpy()[0])*10):20]
+						else:
+							Items = Item[int(T/0.012),:int(np.absolute(self.lb.numpy()[0])*10):20]
+						Itemt = np.reshape(Items,[np.prod(Items.shape),1])
+						test_data.append(Itemt)
+					self.ztest3, self.ttest3, self.thetatest3, self.Ktest3, self.psitest3 = test_data
+					self.fluxtest3 = self.flux_function(self.ttest3)
+
+					self.Nt = 251
+					self.Nz = int(np.absolute(self.lb.numpy()[0])*10/20)
+
+					self.tflux = np.reshape(t,[251,1001])[:,[0]]
+					self.zflux = np.zeros(self.tflux.shape)
+					self.fluxflux = self.flux_function(self.tflux)
 			else:
 				test_env = RRETestProblem(self.training_hp['dt'], self.training_hp['dz'], self.training_hp['T'], self.training_hp['Z'],self.training_hp['noise'], self.training_hp['name'],'')
 				self.ttest_whole, self.ztest_whole, self.psitest_whole, self.Ktest_whole, self.thetatest_whole = test_env.get_training_data()
@@ -446,14 +543,24 @@ class RRENetwork(object):
 
 		array_data_temp = []
 
-		psi_pred, K_pred, theta_pred, f_residual, flux, [psi_z, psi_t, theta_t, K_z, psi_zz] = self.rre_model(self.convert_tensor(self.ztest_whole),self.convert_tensor(self.ttest_whole))
+		psi_pred, K_pred, theta_pred, f_residual, _, [psi_z, psi_t, theta_t, K_z, psi_zz] = self.rre_model(self.convert_tensor(self.ztest_whole),self.convert_tensor(self.ttest_whole))
 		for item in [f_residual, psi_z, psi_t, theta_t, K_z, psi_zz]:
 			Item = np.reshape(item,[self.Nt,self.Nz])
 			array_data_temp.append(Item)
 
-		psi_pred, K_pred, theta_pred = self.predict(self.ztest,self.ttest)
-		fig1, axs1 = plt.subplots(3, 2)
-		#thetat
+		psi_pred, K_pred, theta_pred, f_residual, flux11, [_, _, _, _, _] = self.rre_model(self.convert_tensor(self.ztest),self.convert_tensor(self.ttest))
+		# psi_pred, K_pred, theta_pred = self.predict(self.ztest,self.ttest,self.fluxtest)
+		# psi_pred1, K_pred1, theta_pred1 = self.predict(self.ztest1,self.ttest1,self.fluxtest1)
+		psi_pred1, K_pred1, theta_pred1, f_residual1, flux1, [_, _, _, _, _] = self.rre_model(self.convert_tensor(self.ztest1),self.convert_tensor(self.ttest1))
+		psi_pred2, K_pred2, theta_pred2, f_residual2, flux2, [_, _, _, _, _] = self.rre_model(self.convert_tensor(self.ztest2),self.convert_tensor(self.ttest2))
+		psi_pred3, K_pred3, theta_pred3, f_residual3, flux3, [_, _, _, _, _] = self.rre_model(self.convert_tensor(self.ztest3),self.convert_tensor(self.ttest3))
+		# _, _, theta_pred, _, _, _ = self.rre_model(self.convert_tensor(self.ztest),self.convert_tensor(self.ttest),self.convert_tensor(self.fluxtest))
+		# _, _, _, f_residual, _, _ = self.rre_model(self.convert_tensor(self.zres),self.convert_tensor(self.tres),self.convert_tensor(self.fluxres))
+		_, _, _, _, flux, [_, _, _, _, _] = self.rre_model(self.convert_tensor(self.zflux),self.convert_tensor(self.tflux))
+		flux_residual = flux-self.fluxflux
+
+		fig1, axs1 = plt.subplots(4, 2)
+		# thetat
 		axs1[0,0].plot(self.array_data[0][6,:], self.thetat_dis[6,:], 'b-')
 		axs1[0,0].plot(self.array_data[0][6,:], array_data_temp[3][6,:], 'ro--')
 		axs1[0,0].set_title('Theta_t vs z')
@@ -483,12 +590,26 @@ class RRENetwork(object):
 		axs1[2,0].set_title('psi_zz vs z')
 		axs1[2,0].set(xlabel='z', ylabel='psi_zz')
 
-		#f
-		axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].shape), 'b-')
+		# f
+		axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.array_data[0][6,1:-1].shape), 'b-')
 		# axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
 		axs1[2,1].plot(self.array_data[0][6,1:-1], array_data_temp[0][6,1:-1], 'ro--')
 		axs1[2,1].set_title('f vs z')
 		axs1[2,1].set(xlabel='z', ylabel='f')
+		fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
+
+		axs1[3,0].plot(self.tflux, self.fluxflux, 'b-')
+		# axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		axs1[3,0].plot(self.tflux, flux, 'r--')
+		axs1[3,0].set_title('flux vs z')
+		axs1[3,0].set(xlabel='z', ylabel='flux')
+
+		axs1[3,1].plot(self.tflux, np.zeros(self.tflux.shape), 'b-')
+		# axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		axs1[3,1].plot(self.tflux, flux_residual, 'ro--')
+		axs1[3,1].set_title('flux residual vs z')
+		axs1[3,1].set(xlabel='z', ylabel='flux f')
+
 		fig1.suptitle("epoch {0}".format(epoch), fontsize=16)
 		# plt.show()
 
@@ -499,11 +620,24 @@ class RRENetwork(object):
 
 		# psi_pred, K_pred, theta_pred = rrenet.predict(ztest,ttest)
 
-		fig, axs = plt.subplots(2, 2)
+		fig, axs = plt.subplots(3, 2)
 		axs[0,0].plot(self.ztest, theta_pred, 'ro--')
 		axs[0,0].plot(self.ztest, self.thetatest, 'b-')
 		axs[0,0].set_title('Theta vs z')
 		axs[0,0].set(xlabel='z', ylabel='theta')
+
+		# axs[0,1].plot(self.zres, np.zeros(self.zres.shape), 'b-')
+		# # axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs[0,1].plot(self.zres, f_residual, 'ro--')
+		# axs[0,1].set_title('f vs z')
+		# axs[0,1].set(xlabel='z', ylabel='f')
+
+		# axs[1,0].plot(self.tflux, np.zeros(self.tflux.shape), 'b-')
+		# # axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs[1,0].plot(self.tflux, flux_residual, 'ro--')
+		# axs[1,0].set_title('flux_residual vs z')
+		# axs[1,0].set(xlabel='t', ylabel='flux f')
+		# fig.suptitle("epoch {0}, T = {1}".format(epoch,self.ttest[0,0]), fontsize=16)
 
 		axs[0,1].semilogy(self.ztest, K_pred, 'ro--')
 		axs[0,1].semilogy(self.ztest, self.Ktest, 'b-')
@@ -519,7 +653,152 @@ class RRENetwork(object):
 		axs[1,1].plot(self.psitest, self.thetatest, 'b-')
 		axs[1,1].set_title('Theta vs Psi')
 		axs[1,1].set(xlabel='psi', ylabel='theta')
+
+		axs[2,0].plot(self.ztest, f_residual, 'ro--')
+		axs[2,0].plot(self.ztest, np.zeros(self.ztest.shape), 'b-')
+		axs[2,0].set_title('z vs residual')
+		axs[2,0].set(xlabel='z', ylabel='f')
+
+		axs[2,1].plot(self.ztest, flux11, 'ro--')
+		# axs2[2,1].plot(self.ztest1, np.zeros(self.ztets1.shape), 'b-')
+		axs[2,1].set_title('z vs flux')
+		axs[2,1].set(xlabel='z', ylabel='q')
 		fig.suptitle("T = {0}".format(self.ttest[0,0]), fontsize=16)
+
+		fig2, axs2 = plt.subplots(3, 2)
+		axs2[0,0].plot(self.ztest1, theta_pred1, 'ro--')
+		axs2[0,0].plot(self.ztest1, self.thetatest1, 'b-')
+		axs2[0,0].set_title('Theta vs z')
+		axs2[0,0].set(xlabel='z', ylabel='theta')
+
+		# axs[0,1].plot(self.zres, np.zeros(self.zres.shape), 'b-')
+		# # axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs[0,1].plot(self.zres, f_residual, 'ro--')
+		# axs[0,1].set_title('f vs z')
+		# axs[0,1].set(xlabel='z', ylabel='f')
+
+		# axs[1,0].plot(self.tflux, np.zeros(self.tflux.shape), 'b-')
+		# # axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs[1,0].plot(self.tflux, flux_residual, 'ro--')
+		# axs[1,0].set_title('flux_residual vs z')
+		# axs[1,0].set(xlabel='t', ylabel='flux f')
+		# fig.suptitle("epoch {0}, T = {1}".format(epoch,self.ttest[0,0]), fontsize=16)
+
+		axs2[0,1].semilogy(self.ztest1, K_pred1, 'ro--')
+		axs2[0,1].semilogy(self.ztest1, self.Ktest1, 'b-')
+		axs2[0,1].set_title('K vs z')
+		axs2[0,1].set(xlabel='z', ylabel='K')
+
+		axs2[1,0].plot(self.ztest1, psi_pred1, 'ro--')
+		axs2[1,0].plot(self.ztest1, self.psitest1, 'b-')
+		axs2[1,0].set_title('Psi vs z')
+		axs2[1,0].set(xlabel='z', ylabel='psi')
+
+		axs2[1,1].plot(psi_pred1, theta_pred1, 'ro--')
+		axs2[1,1].plot(self.psitest1, self.thetatest1, 'b-')
+		axs2[1,1].set_title('Theta vs Psi')
+		axs2[1,1].set(xlabel='psi', ylabel='theta')
+
+		axs2[2,0].plot(self.ztest1, f_residual1, 'ro--')
+		axs2[2,0].plot(self.ztest1, np.zeros(self.ztest1.shape), 'b-')
+		axs2[2,0].set_title('z vs residual')
+		axs2[2,0].set(xlabel='z', ylabel='f')
+
+		axs2[2,1].plot(self.ztest1, flux1, 'ro--')
+		# axs2[2,1].plot(self.ztest1, np.zeros(self.ztets1.shape), 'b-')
+		axs2[2,1].set_title('z vs flux')
+		axs2[2,1].set(xlabel='z', ylabel='q')
+		fig2.suptitle("T = {0}".format(self.ttest1[0,0]), fontsize=16)
+
+		fig3, axs3 = plt.subplots(3, 2)
+		axs3[0,0].plot(self.ztest2, theta_pred2, 'ro--')
+		axs3[0,0].plot(self.ztest2, self.thetatest2, 'b-')
+		axs3[0,0].set_title('Theta vs z')
+		axs3[0,0].set(xlabel='z', ylabel='theta')
+
+		# axs[0,1].plot(self.zres, np.zeros(self.zres.shape), 'b-')
+		# # axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs[0,1].plot(self.zres, f_residual, 'ro--')
+		# axs[0,1].set_title('f vs z')
+		# axs[0,1].set(xlabel='z', ylabel='f')
+
+		# axs[1,0].plot(self.tflux, np.zeros(self.tflux.shape), 'b-')
+		# # axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs[1,0].plot(self.tflux, flux_residual, 'ro--')
+		# axs[1,0].set_title('flux_residual vs z')
+		# axs[1,0].set(xlabel='t', ylabel='flux f')
+		# fig.suptitle("epoch {0}, T = {1}".format(epoch,self.ttest[0,0]), fontsize=16)
+
+		axs3[0,1].semilogy(self.ztest2, K_pred2, 'ro--')
+		axs3[0,1].semilogy(self.ztest2, self.Ktest2, 'b-')
+		axs3[0,1].set_title('K vs z')
+		axs3[0,1].set(xlabel='z', ylabel='K')
+
+		axs3[1,0].plot(self.ztest2, psi_pred2, 'ro--')
+		axs3[1,0].plot(self.ztest2, self.psitest2, 'b-')
+		axs3[1,0].set_title('Psi vs z')
+		axs3[1,0].set(xlabel='z', ylabel='psi')
+
+		axs3[1,1].plot(psi_pred2, theta_pred2, 'ro--')
+		axs3[1,1].plot(self.psitest2, self.thetatest2, 'b-')
+		axs3[1,1].set_title('Theta vs Psi')
+		axs3[1,1].set(xlabel='psi', ylabel='theta')
+
+		axs3[2,0].plot(self.ztest2, f_residual2, 'ro--')
+		axs3[2,0].plot(self.ztest2, np.zeros(self.ztest2.shape), 'b-')
+		axs3[2,0].set_title('z vs residual')
+		axs3[2,0].set(xlabel='z', ylabel='f')
+
+		axs3[2,1].plot(self.ztest2, flux2, 'ro--')
+		# axs3[2,1].plot(self.ztest1, np.zeros(self.ztets1.shape), 'b-')
+		axs3[2,1].set_title('z vs flux')
+		axs3[2,1].set(xlabel='z', ylabel='q')
+		fig3.suptitle("T = {0}".format(self.ttest2[0,0]), fontsize=16)
+
+		fig4, axs4 = plt.subplots(3, 2)
+		axs4[0,0].plot(self.ztest3, theta_pred3, 'ro--')
+		axs4[0,0].plot(self.ztest3, self.thetatest3, 'b-')
+		axs4[0,0].set_title('Theta vs z')
+		axs4[0,0].set(xlabel='z', ylabel='theta')
+
+		# axs[0,1].plot(self.zres, np.zeros(self.zres.shape), 'b-')
+		# # axs1[2,1].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs[0,1].plot(self.zres, f_residual, 'ro--')
+		# axs[0,1].set_title('f vs z')
+		# axs[0,1].set(xlabel='z', ylabel='f')
+
+		# axs[1,0].plot(self.tflux, np.zeros(self.tflux.shape), 'b-')
+		# # axs1[3,0].plot(self.array_data[0][6,1:-1], np.zeros(self.f_dis[6,:].s, 'ro--')
+		# axs[1,0].plot(self.tflux, flux_residual, 'ro--')
+		# axs[1,0].set_title('flux_residual vs z')
+		# axs[1,0].set(xlabel='t', ylabel='flux f')
+		# fig.suptitle("epoch {0}, T = {1}".format(epoch,self.ttest[0,0]), fontsize=16)
+
+		axs4[0,1].semilogy(self.ztest3, K_pred3, 'ro--')
+		axs4[0,1].semilogy(self.ztest3, self.Ktest3, 'b-')
+		axs4[0,1].set_title('K vs z')
+		axs4[0,1].set(xlabel='z', ylabel='K')
+
+		axs4[1,0].plot(self.ztest3, psi_pred3, 'ro--')
+		axs4[1,0].plot(self.ztest3, self.psitest3, 'b-')
+		axs4[1,0].set_title('Psi vs z')
+		axs4[1,0].set(xlabel='z', ylabel='psi')
+
+		axs4[1,1].plot(psi_pred2, theta_pred3, 'ro--')
+		axs4[1,1].plot(self.psitest2, self.thetatest3, 'b-')
+		axs4[1,1].set_title('Theta vs Psi')
+		axs4[1,1].set(xlabel='psi', ylabel='theta')
+
+		axs4[2,0].plot(self.ztest3, f_residual3, 'ro--')
+		axs4[2,0].plot(self.ztest3, np.zeros(self.ztest3.shape), 'b-')
+		axs4[2,0].set_title('z vs residual')
+		axs4[2,0].set(xlabel='z', ylabel='f')
+
+		axs4[2,1].plot(self.ztest3, flux3, 'ro--')
+		# axs4[2,1].plot(self.ztest1, np.zeros(self.ztets1.shape), 'b-')
+		axs4[2,1].set_title('z vs flux')
+		axs4[2,1].set(xlabel='z', ylabel='q')
+		fig4.suptitle("T = {0}".format(self.ttest3[0,0]), fontsize=16)
 
 		# plt.show()
 		filename = "{1}/epoch_{0}.pdf".format(epoch,self.pathname)
@@ -534,6 +813,15 @@ class RRENetwork(object):
 		# self.save_multi_image(filename)
 		# plt.savefig('my_plot.png')
 
+	def flux_function(self, t, toggle = 'Bandai1'):
+		flux = np.zeros(t.shape)
+		if toggle == 'Bandai1':
+			flux[np.argwhere(np.logical_and(t>=0,t<0.25))[:,0]] = -10
+			flux[np.argwhere(np.logical_and(t>=0.5,t<1.0))[:,0]] = 0.3
+			flux[np.argwhere(np.logical_and(t>=1.5,t<2.0))[:,0]] = 0.3
+			flux[np.argwhere(np.logical_and(t>=2.0,t<2.25))[:,0]] = -10
+			flux[np.argwhere(np.logical_and(t>=2.5,t<=3.0))[:,0]] = 0.3
+		return flux
 
 class PsiNetwork(object):
 	def __init__(self,psistruct, pathname):
@@ -689,6 +977,7 @@ class PsiOutput(tf.keras.layers.Layer):
 			shape=(self.units,), initializer="zeros", trainable=True, name = "bias")
 
 	def call(self, inputs):
+		# return tf.math.exp(tf.matmul(inputs, self.kernel) + self.bias)
 		return -tf.math.exp(tf.matmul(inputs, self.kernel) + self.bias)
 
 	def get_config(self):

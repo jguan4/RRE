@@ -5,109 +5,61 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt 
 from mpl_toolkits.mplot3d import Axes3D
-
-def extract_data(t,z,theta, Nt = 251, Nz = 1001, Ns = 10, Ne = 200, Ni = 20):
-	train_data = []
-	for item in [z,t,theta]:
-		Item = np.reshape(item,[Nt,Nz])
-		Items = Item[:,Ns:Ne:Ni]
-		Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-		train_data.append(Itemt)
-	return train_data
-
-def flux_function(t, toggle = 'Bandai1'):
-	flux = np.zeros(t.shape)
-	if toggle == 'Bandai1':
-		flux[np.argwhere(np.logical_and(t>=0,t<0.25))] = -10
-		flux[np.argwhere(np.logical_and(t>=0.5,t<1.0))] = 0.3
-		flux[np.argwhere(np.logical_and(t>=1.5,t<2.0))] = 0.3
-		flux[np.argwhere(np.logical_and(t>=2.0,t<2.25))] = -10
-		flux[np.argwhere(np.logical_and(t>=2.5,t<=3.0))] = 0.3
-	return flux
-
-
-def extract_top_boundary(t,z,vec, Nt = 251, Nz = 1001):
-	train_data = []
-	for item in [z,t,vec]:
-		Item = np.reshape(item,[Nt,Nz])
-		Items = Item[:,[0]]
-		Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-		train_data.append(Itemt)
-	return train_data
-
-def extract_bottom_boundary(t,z,vec,Nt = 251, Nz = 1001, Nb = None):
-	train_data = []
-	for item in [z,t,vec]:
-		Item = np.reshape(item,[Nt,Nz])
-		Items = Item[:,[-1]] if Nb is None else Item[:,[Nb]]
-		Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-		train_data.append(Itemt)
-	return train_data
-
-def extract_data_test(t,z,theta, K, psi, T = None):
-	test_data = []
-	for item in [z,t,theta, K, psi]:
-		Item = np.reshape(item,[251,1001])
-		if T is None:
-		# Items = Item[int(T/0.012),0:200]
-			Items = Item[:,:200]
-		else:
-			Items = Item[int(T/0.012),0:200]
-		Itemt = np.reshape(Items,[np.prod(Items.shape),1])
-		test_data.append(Itemt)
-	return test_data
-
-def relative_error(data, pred):
-	# data = np.reshape(data,[251,200])
-	# pred = np.reshape(pred,[251,200])
-	error = np.sum((data-pred)**2,axis = None)/np.sum(data**2,axis = None)
-	return error
-
-def psi_func(theta):
-	thetas = 0.41
-	thetar = 0.065
-	n = 1.89
-	m = 1-1/n
-	alpha = 0.075
-	Psi = (((thetas-thetar)/(theta-thetar))**(1/m)-1)**(1/n)/(-alpha)
-	return Psi
+from utils import *
 
 def load_data(training_hp, csv_file = None):
 	if csv_file is not None:
-		EnvFolder = "./RRE_Bandai_{1}domain_{0}_weight_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
-		# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
-		Nt = int(training_hp['T']/training_hp['dt'])
-		Nz = int(training_hp['Z']/training_hp['dz'])+1
-		weights = training_hp['weights']
-		add_tag = "_f{0}_flux{2}_theta{1}".format(weights[1], weights[2], weights[3])
-		if weights[0] == 0:
-			weight_tag = ''
-		else:
-			weight_tag = "_weight{0}".format(weights[0])
-		DataFolder = EnvFolder+"/Nt{0}_Nz{1}_noise{2}{3}{4}{5}".format(251,10,training_hp['noise'],training_hp['norm'], weight_tag,add_tag)
+		if csv_file == 'sandy_loam_nod.csv':
+			EnvFolder = "./RRE_Bandai_{1}domain_{0}_weight_halftimetheta_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]))
+			# EnvFolder = './RRE_Bandai_100domain_20lb_checkpoints'
+			Nt = int(training_hp['T']/training_hp['dt'])
+			Nz = int(training_hp['Z']/training_hp['dz'])+1
+			weights = training_hp['weights']
+			add_tag = "_f{0}_flux{2}_theta{1}".format(weights[1], weights[2], weights[3])
+			if weights[0] == 0:
+				weight_tag = ''
+			else:
+				weight_tag = "_weight{0}".format(weights[0])
+			DataFolder = EnvFolder+"/Nt{0}_Nz{1}_noise{2}{3}{4}{5}".format(251,10,training_hp['noise'],training_hp['norm'], weight_tag,add_tag)
 
-		if not os.path.exists(EnvFolder):
-			os.makedirs(EnvFolder)
-		if not os.path.exists(DataFolder):
-			os.makedirs(DataFolder)
-		pathname = DataFolder
+			if not os.path.exists(EnvFolder):
+				os.makedirs(EnvFolder)
+			if not os.path.exists(DataFolder):
+				os.makedirs(DataFolder)
+			pathname = DataFolder
 
-		data = pd.read_csv('./'+csv_file)
-		t = data['time'].values[:,None]
-		z = data['depth'].values[:,None]
-		psi = data['head'].values[:,None]
-		K = data['K'].values[:,None]
-		C = data['C'].values[:,None]
-		theta = data['theta'].values[:,None]
-		flux = data['flux'].values[:,None]
-		zt, tt, thetat = extract_data(t,z,theta)
-		zf, tf, thetaf = extract_data(t,z,theta, Ne = np.absolute(training_hp['lb'][0])*10, Ni = 10)
-		ztb, ttb, fluxtb = extract_top_boundary(t,z,flux)
-		zbb, tbb, psibb = extract_bottom_boundary(t,z,psi, Nb = np.absolute(training_hp['lb'][0])*10)
-		
-		theta_data = {'z':zt, 't':tt, 'data':thetat}
-		residual_data = {'z':zf, 't':tf}
-		boundary_data = {'top':{'z':ztb, 't':ttb, 'data':fluxtb, 'type':'flux'}, 'bottom':{'z':zbb, 't':tbb, 'data':psibb, 'type':'psi'}}
+			data = pd.read_csv('./'+csv_file)
+			t = data['time'].values[:,None]
+			z = data['depth'].values[:,None]
+			psi = data['head'].values[:,None]
+			K = data['K'].values[:,None]
+			C = data['C'].values[:,None]
+			theta = data['theta'].values[:,None]
+			flux = data['flux'].values[:,None]
+			zt, tt, thetat = extract_data_time_space([z,t,theta], Nt = 251, Nz = 1001, Ns = 1, Ne = 200, Ni = 20, Nst = 0, Net = 125, Nit = 1)
+			# zt, tt, thetat = extract_data([z,t,theta])
+			# zf1 = np.linspace(-25,0,251)
+			# zf2 = np.linspace(-100,-26,75)
+			# zff = np.hstack((zf1, zf2))
+			# tff = np.linspace(0,3,251)
+			# Z,T = np.meshgrid(zff,tff)
+			# zf = Z.flatten()
+			# tf = T.flatten()
+			# zf, tf = extract_data_time_space([z,t], Nt = 251, Nz = 1001, Ns = 0, Ne = 1001, Ni = 3, Nst = 0, Net = 251, Nit = 1)
+			zf, tf = extract_data([z,t], Ne = np.absolute(training_hp['lb'][0])*10, Ni = 10)
+			ztb, ttb, fluxtb = extract_top_boundary([z,t,flux])
+			zbb, tbb, psibb = extract_bottom_boundary([z,t,psi], Nb = np.absolute(training_hp['lb'][0])*10)
+
+			flux_inputs = []
+			for item in [tt,tf,ttb,tbb]:
+				flux_inputs.append(flux_function(item))
+
+			fluxt, fluxf, fluxtb, fluxbb = flux_inputs
+			
+			theta_data = {'z':zt, 't':tt, 'data':thetat}
+			residual_data = {'z':zf, 't':tf}
+			boundary_data = {'top':{'z':ztb, 't':ttb, 'data':fluxtb, 'type':'flux'}, 'bottom':{'z':zbb, 't':tbb, 'data':psibb, 'type':'psi'}}
+	
 	else:
 		weights = training_hp['weights']
 		add_tag = "_f{0}_flux{2}_theta{1}".format(weights[1], weights[2], weights[3])
@@ -261,21 +213,22 @@ name = 'Test1'
 csv_file = "sandy_loam_nod.csv" 
 if csv_file is not None:
 	# lb = [-20,0]
-	lb = [-50,0]
+	# lb = [-50,0]
+	lb = [-100,0]
 	ub = [0,3]
 else:
 	if name == 'Test1':
 		lb = [0,0]
 		ub = [40,360]
 psistruct = {'layers':[2,40,40,40,40,40,40,1]} 
-Kstruct = {'layers':[1,40,40,40,1],'toggle':'MNN'} 
+Kstruct = {'layers':[1,40,1],'toggle':'MNN'} 
 thetastruct = {'layers':[1,40,1],'toggle':'MNN'} 
 # data = np.genfromtxt(dataname+'.csv',delimiter=',')
 lbfgs_options={'disp': None, 'maxcor': 50, 'ftol': 2.220446049250313e-16, 'gtol': 1e-09, 'maxfun': 50000, 'maxiter': 50000, 'maxls': 50, 'iprint':1}
-adam_options = {'epoch':10000}
+adam_options = {'epoch':8950}
 total_epoch = lbfgs_options['maxiter'] + adam_options['epoch']
 # 'dz': 1, 'dt': 10,'Z':40, 'T':360
-training_hp = {'dz': 0.1, 'dt': 0.012,'Z':100, 'T':3, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm1', 'weights': [1, 1e3, 10000, 1e-3], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'linear'}
+training_hp = {'dz': 0.1, 'dt': 0.012,'Z':100, 'T':3, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm1', 'weights': [1, 1, 1e3, 1], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
 
 test_hp = {'name':'Test1', 'dz': 0.1, 'dt': .012,'Z':100, 'T':3, 'noise':0}
 
