@@ -41,7 +41,7 @@ class RRENetwork(object):
 		self.Theta = ThetaNetwork(thetastruct, self.pathname)
 		self.weights = self.training_hp['weights']
 		self.psiweight = self.convert_tensor(self.weights[0])
-		self.fweight = self.convert_tensor(self.weights[1])
+		self.fweight_original = self.convert_tensor(self.weights[1])
 		self.thetaweight = self.convert_tensor(self.weights[2])
 		self.fluxweight = self.convert_tensor(self.weights[3])
 		self.loss_log = [['Epoch'],['l_theta'],['l_f'],['l_top'],['l_bottom'],['weight_theta'],['weight_f'],['weight_flux'],['weight_psi']] # theta, f, top bound, lower bound
@@ -51,6 +51,7 @@ class RRENetwork(object):
 		self.epoch = self.starting_epoch
 		self.scheduleing_toggle = self.training_hp['scheduleing_toggle']
 		self.total_epoch = self.training_hp['total_epoch']
+		# self.fweight = self.linear_shedule(start_weight=self.fweight_original, end_weight = self.convert_tensor(1.0), duration = self.total_epoch/4*3) #flin
 
 	@tf.function
 	def rre_model(self, z_tf, t_tf):
@@ -110,28 +111,31 @@ class RRENetwork(object):
 				# else:
 				# return self.thetaweight/500, self.fweight, self.psiweight, self.fluxweight
 			# else:
-			return self.thetaweight, self.fweight, self.psiweight, self.fluxweight
+			return self.thetaweight, self.fweight_original, self.psiweight, self.fluxweight
 		elif self.scheduleing_toggle == 'linear':
-			if self.epoch %500 == 0:
+			if self.epoch %100 == 0 or self.epoch==self.starting_epoch:
 			# thetaweight = self.linear_shedule(start_weight=self.thetaweight, end_weight = self.thetaweight/10000, duration = self.total_epoch/4*3)
 				# thetaweight = self.thetaweight
 				# psiweight = self.psiweight
 				# fweight = self.fweight
 				# fluxweight = self.fluxweight
-				self.fweight = self.linear_shedule(start_weight=self.fweight, end_weight = self.convert_tensor(1.0), duration = self.total_epoch/4*3) #flin
+				# self.fweight = self.linear_shedule(start_weight=self.fweight_original, end_weight = self.convert_tensor(1.0), passed_epoch=self.epoch, duration = 10000/4*3) #flin
+				self.fweight = self.convert_tensor(1.0)
+				self.thetaweight = self.convert_tensor(5e3)
+				# self.thetaweight = self.linear_shedule(start_weight=self.convert_tensor(5e3), end_weight = self.convert_tensor(1.0), passed_epoch=self.epoch-self.starting_epoch , duration = self.total_epoch/2) #flin
 				# self.fweight = self.linear_shedule(start_weight=self.fweight, end_weight = self.convert_tensor(100.0), duration = self.total_epoch/4*3) # flin1
 			# self.fweight = self.convert_tensor(1.0)
 			return self.thetaweight,self.fweight,self.psiweight, self.fluxweight
 		elif self.scheduleing_toggle == 'exp':
 
-			if self.epoch %500 == 0:
+			if self.epoch %10000 == 0:
 			# thetaweight = self.linear_shedule(start_weight=self.thetaweight, end_weight = self.thetaweight/10000, duration = self.total_epoch/4*3)
 				# thetaweight = self.thetaweight
 				# psiweight = self.psiweight
 				# fweight = self.fweight
 				# fluxweight = self.fluxweight
-				self.fweight = self.exp_schedule(start_weight=self.fweight, end_weight = self.convert_tensor(100.0), duration = self.total_epoch/4*3)
-			return self.thetaweight,self.fweight,self.psiweight, self.fluxweight
+				self.fweight = self.exp_schedule(start_weight=self.fweight_original, end_weight = self.convert_tensor(100.0), duration = self.total_epoch/4*3)
+			return self.thetaweight,self.fweight*10,self.psiweight, self.fluxweight
 		elif self.scheduleing_toggle == 'loss':
 			if loss_theta and loss_theta.numpy()<1e-3:
 				self.thetaweight = self.convert_tensor(1.0)
@@ -143,13 +147,13 @@ class RRENetwork(object):
 				self.thetaweight = self.convert_tensor(1.0)
 			return self.thetaweight, self.fweight, self.psiweight, self.fluxweight
 
-	def exp_schedule(self,start_weight,end_weight,duration):
-		passed_epoch = self.epoch
+	def exp_schedule(self,start_weight,end_weight,passed_epoch,duration):
+		# passed_epoch = self.epoch
 		y = start_weight*np.exp(np.log(end_weight/start_weight)/duration*passed_epoch) if passed_epoch<= duration else end_weight
 		return y
 
-	def linear_shedule(self, start_weight, end_weight, duration):
-		passed_epoch = self.epoch
+	def linear_shedule(self, start_weight, end_weight, passed_epoch, duration):
+		# passed_epoch = self.epoch
 		y = (end_weight-start_weight)/duration*passed_epoch+start_weight if passed_epoch<= duration else end_weight
 		return y
 
@@ -826,17 +830,24 @@ class RRENetwork(object):
 class PsiNetwork(object):
 	def __init__(self,psistruct, pathname):
 		self.layers = psistruct['layers']
+		self.NN_toggle = psistruct['toggle']
 		# self.lb = tf.constant(psistruct['lb'],dtype = tf.float64)
 		# self.ub = tf.constant(psistruct['ub'],dtype = tf.float64)
 		N_hidden = len(self.layers)-2
 		N_width = self.layers[1]
 		self.size_w = []
 		self.size_b = []
-		self.path = "{2}/Psi_{0}layer_{1}width_checkpoint".format(N_hidden, N_width, pathname)
+		self.path = "{2}/Psi{3}_{0}layer_{1}width_checkpoint".format(N_hidden, N_width, pathname, self.NN_toggle)
 		self.initialize_PsiNN()
 		self.get_weights_struct()
 
 	def initialize_PsiNN(self):
+		if self.NN_toggle == 'DNN':
+			self.initialize_DNN()
+		elif self.NN_toggle == 'ResNet':
+			self.initialize_ResNet()
+
+	def initialize_DNN(self):
 		self.net = tf.keras.Sequential()
 		self.net.add(tf.keras.layers.InputLayer(input_shape=(self.layers[0],)))
 		# self.net.add(tf.keras.layers.Lambda(
@@ -845,6 +856,18 @@ class PsiNetwork(object):
 			self.net.add(tf.keras.layers.Dense(
 				width, activation=tf.nn.tanh,
 				kernel_initializer="glorot_normal"))
+		self.net.add(PsiOutput(self.layers[-1]))
+
+	def initialize_ResNet(self):
+		self.net = tf.keras.Sequential()
+		self.net.add(tf.keras.layers.InputLayer(input_shape=(self.layers[0],)))
+		# self.net.add(tf.keras.layers.Lambda(
+		# 	lambda X: 2.0*(X - self.lb)/(self.ub - self.lb) - 1.0))
+		self.net.add(tf.keras.layers.Dense(
+			self.layers[1], activation=tf.nn.tanh,
+			kernel_initializer="glorot_normal"))
+		for width in self.layers[2:-1]:
+			self.net.add(ResLayer(width))
 		self.net.add(PsiOutput(self.layers[-1]))
 
 	def get_weights_struct(self):
@@ -871,6 +894,8 @@ class KNetwork(object):
 		self.path = "{2}/K{3}_{0}layer_{1}width_checkpoint".format(N_hidden, N_width, pathname, self.NN_toggle)
 		if self.NN_toggle == 'MNN':
 			self.initialize_KMNN()
+		elif self.NN_toggle == 'ResNet':
+			self.initialize_KResNN()
 		else:
 			self.initialize_KNN()
 		self.get_weights_struct()
@@ -902,6 +927,19 @@ class KNetwork(object):
 				kernel_initializer="glorot_normal"))
 		self.net.add(KOutput(self.layers[-1]))
 
+	def initialize_KResNN(self):
+		self.net = tf.keras.Sequential()
+		self.net.add(tf.keras.layers.InputLayer(input_shape=(self.layers[0],)))
+		self.net.add(tf.keras.layers.Dense(
+			self.layers[1], activation=tf.nn.tanh,
+			kernel_initializer="glorot_normal"))
+		# self.net.add(tf.keras.layers.Lambda(
+		# 	lambda X: 2.0*(X - self.lb)/(self.ub - self.lb) - 1.0))
+		for width in self.layers[2:-1]:
+			self.net.add(ResLayer(
+				width))
+		self.net.add(KOutput(self.layers[-1]))
+
 	def save_model(self):
 		self.net.save_weights(self.path+'.h5')
 
@@ -921,6 +959,8 @@ class ThetaNetwork(object):
 		self.path = "{2}/Theta{3}_{0}layer_{1}width_checkpoint".format(N_hidden, N_width, pathname, self.NN_toggle)
 		if self.NN_toggle == 'MNN':
 			self.initialize_ThetaMNN()
+		elif self.NN_toggle == 'ResNet':
+			self.initialize_ThetaResNN()
 		else:
 			self.initialize_ThetaNN()
 		self.get_weights_struct()
@@ -939,6 +979,21 @@ class ThetaNetwork(object):
 			self.net.add(tf.keras.layers.Dense(
 				width, activation=tf.nn.tanh,
 				kernel_initializer="glorot_normal"))
+		self.net.add(tf.keras.layers.Dense(
+				self.layers[-1], activation=tf.nn.sigmoid,
+				kernel_initializer="glorot_normal"))
+
+	def initialize_ThetaResNN(self):
+		self.net = tf.keras.Sequential()
+		self.net.add(tf.keras.layers.InputLayer(input_shape=(self.layers[0],)))
+		self.net.add(tf.keras.layers.Dense(
+			self.layers[1], activation=tf.nn.tanh,
+			kernel_initializer="glorot_normal"))
+		# self.net.add(tf.keras.layers.Lambda(
+		# 	lambda X: 2.0*(X - self.lb)/(self.ub - self.lb) - 1.0))
+		for width in self.layers[2:-1]:
+			self.net.add(ResLayer(
+				width))
 		self.net.add(tf.keras.layers.Dense(
 				self.layers[-1], activation=tf.nn.sigmoid,
 				kernel_initializer="glorot_normal"))
@@ -1038,4 +1093,25 @@ class NMNN_Init(tf.keras.initializers.Initializer):
 	def get_config(self):  # To support serialization
 		return {"mean": self.mean, "stddev": self.stddev}
 
+
+class ResLayer(tf.keras.layers.Layer):
+	def __init__(self, units=32):
+		super(ResLayer, self).__init__()
+		self.units = units
+
+	def build(self, input_shape):
+		self.kernel = self.add_weight(
+			shape=(input_shape[-1], self.units),
+			initializer="glorot_normal",
+			trainable=True,name = "kernel")
+		self.bias = self.add_weight(
+			shape=(self.units,), initializer="zeros", trainable=True, name = "bias")
+
+	def call(self, inputs):
+		return tf.math.tanh(tf.matmul(inputs, self.kernel) + self.bias)+inputs
+		# ten = tf.constant(10,dtype = tf.float64)
+		# return tf.math.pow(ten,(tf.matmul(inputs, self.kernel) + self.bias))
+
+	def get_config(self):
+		return {"units": self.units}
 

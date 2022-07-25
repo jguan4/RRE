@@ -86,6 +86,7 @@ class RRENetwork_flux(RRENetwork):
 
 	def loss_residual(self, residual_data, log = False):
 		_, _, _, f_pred, _, _ = self.rre_model(residual_data['z'], residual_data['t'], residual_data['flux'])
+		# loss = tf.reduce_sum(tf.square(f_pred))
 		loss = self.loss_f(f_pred)
 		if log:
 			self.loss_log[2].append(loss.numpy())
@@ -158,7 +159,7 @@ class RRENetwork_flux(RRENetwork):
 					self.test_data_whole = extract_data_test([z,t,theta, K, psi], T = T, )
 					self.test_data_whole.append(flux_function(self.test_data_whole[1]))
 
-					plot_Ts = [0.1,0.6,1.5,1.6,2.2,2.6]
+					plot_Ts = [0.1,0.6,1.5,1.6,1.8,2.0,2.005,2.1,2.2,2.6,2.8]
 					self.plot_test_datas = []
 					for i in range(len(plot_Ts)):
 						T = plot_Ts[i]

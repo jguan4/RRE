@@ -6,7 +6,7 @@ import numpy as np
 import os
 from tkinter import *
 import matplotlib
-matplotlib.use('TkAgg')
+# matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt 
 from mpl_toolkits.mplot3d import Axes3D
 from utils import *
@@ -14,7 +14,7 @@ from utils import *
 def load_data(training_hp, csv_file = None):
 	if csv_file is not None:
 		if csv_file == 'sandy_loam_nod.csv':
-			tags = '_ACTUALhalftimetheta_flin_Knn'
+			tags = '_ACTUALhalftimetheta_Knn_trainhalf1'
 			if training_hp['network_toggle'] == 'RRENetwork_flux':
 				EnvFolder = "./RRE_Bandai_{1}domain_{0}_weight_flux{2}_checkpoints".format(training_hp['scheduleing_toggle'],np.absolute(training_hp['lb'][0]),tags)
 			elif training_hp['network_toggle'] == 'RRENetwork_flux_ide':
@@ -28,7 +28,7 @@ def load_data(training_hp, csv_file = None):
 				weight_tag = ''
 			else:
 				weight_tag = "_weight{0}".format(weights[0])
-			DataFolder = EnvFolder+"/Nt{0}_Nz{1}_noise{2}{3}{4}{5}".format(251,10,training_hp['noise'],training_hp['norm'], weight_tag,add_tag)
+			DataFolder = EnvFolder+"/Nt{0}_Nz{1}_noise{2}{3}{4}{5} - savepoint".format(251,10,training_hp['noise'],training_hp['norm'], weight_tag,add_tag)
 
 			if not os.path.exists(EnvFolder):
 				os.makedirs(EnvFolder)
@@ -44,20 +44,37 @@ def load_data(training_hp, csv_file = None):
 			C = data['C'].values[:,None]
 			theta = data['theta'].values[:,None]
 			flux = data['flux'].values[:,None]
-			zt, tt, thetat = extract_data_time_space([z,t,theta], Nt = 251, Nz = 1001, Ns = 1, Ne = 200, Ni = 20, Nst = 0, Net = 125, Nit = 1)
+			zt, tt, thetat = extract_data_time_space([z,t,theta], Nt = 251, Nz = 1001, Ns = 1, Ne = 200, Ni = 20, Nst = 0, Net = 126, Nit = 1)
 			# zt, tt, thetat = extract_data([z,t,theta])
 			zf1 = np.linspace(-25,0,26) #densef1
+			# zf1 = np.linspace(-25,0,51) #densef2
 			# zf2 = np.linspace(-100,-26,186) #densef1
+			# zf2 = np.linspace(-100,-26,75) #not dense
 			zf2 = np.linspace(-100,-26,75) #not dense
 			zff = np.hstack((zf2, zf1))
 			tff = np.linspace(0,3,251)
-			Z,T = np.meshgrid(zff,tff)
+			tff1 = np.linspace(0,1.5,126)
+			tff2 = np.linspace(1.5,1.6,101)
+			# tff1 = tff[0:int(len(tff)/2)]
+			# tff2 = tff[int(len(tff)/2):int(len(tff)/3*2)]
+			# tff3 = tff[int(len(tff)/3*2)::]
+			tfff = np.hstack((tff1,tff2[1::]))
+			Z,T = np.meshgrid(zff,tfff)
+			print(T)
+			input()
 			zf = np.reshape(Z,[np.prod(Z.shape),1])
 			tf = np.reshape(T,[np.prod(T.shape),1])
 			# zf, tf = extract_data_time_space([z,t], Nt = 251, Nz = 1001, Ns = 0, Ne = 1001, Ni = 10, Nst = 0, Net = 251, Nit = 1)
 			# zf, tf = extract_data([z,t], Ne = np.absolute(training_hp['lb'][0])*10, Ni = 10)
-			ztb, ttb, fluxtb = extract_top_boundary([z,t,flux])
-			zbb, tbb, psibb = extract_bottom_boundary([z,t,psi], Nb = np.absolute(training_hp['lb'][0])*10)
+			ttb = np.reshape(tfff,[len(tfff),1])
+			ztb = np.zeros(ttb.shape)
+
+			tbb = np.reshape(tfff,[len(tfff),1])
+			zbb = -100*np.ones(tbb.shape)
+			psibb = -1000*np.ones(tbb.shape)
+			# ztb, ttb, fluxtb = extract_top_boundary([z,t,flux])
+
+			# zbb, tbb, psibb = extract_bottom_boundary([z,t,psi], Nb = np.absolute(training_hp['lb'][0])*10)
 
 			flux_inputs = []
 			for item in [tt,tf,ttb,tbb]:
@@ -190,8 +207,8 @@ def test_data(test_hp, csv_file = None):
 
 def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggle, csv_file):
 	theta_data, residual_data, boundary_data, pathname = load_data(training_hp, csv_file = csv_file)
-	print(theta_data['t'])
-	input()
+	# print(theta_data['t'])
+	# input()
 	if training_hp['network_toggle'] == 'RRENetwork_flux':
 		rrenet = RRENetwork_flux(psistruct, Kstruct, thetastruct, training_hp, pathname)
 	elif training_hp['network_toggle'] == 'RRENetwork_flux_ide':
@@ -320,8 +337,8 @@ def main_loop(psistruct, Kstruct, thetastruct, training_hp, test_hp, train_toggl
 		# plt.show()
 
 
-train_toggle = 'train'
-starting_epoch = 0
+train_toggle = 'retrain'
+starting_epoch = 123761
 name = 'Test1'
 # csv_file = None 
 csv_file = "sandy_loam_nod.csv" 
@@ -339,15 +356,15 @@ else:
 	if name == 'Test1':
 		lb = [0,0]
 		ub = [40,360]
-psistruct = {'layers':[3,40,40,40,40,40,40,1]} 
+psistruct = {'layers':[3,40,40,40,40,40,40,1],'toggle':'DNN'} 
 Kstruct = {'layers':[1,40,40,40,1],'toggle':'NN'} 
 thetastruct = {'layers':[1,40,1],'toggle':'MNN'} 
 # data = np.genfromtxt(dataname+'.csv',delimiter=',')
-lbfgs_options={'disp': None, 'maxcor': 50, 'ftol': 2.220446049250313e-16, 'gtol': 1e-09, 'maxfun': 50000, 'maxiter': 50000, 'maxls': 50, 'iprint':1}
-adam_options = {'epoch':10000}
+lbfgs_options={'disp': None, 'maxcor': 50, 'ftol': 2.220446049250313e-16, 'gtol': 1e-09, 'maxfun': 100000, 'maxiter': 100000, 'maxls': 50, 'iprint':1}
+adam_options = {'epoch':50000}
 total_epoch = lbfgs_options['maxiter'] + adam_options['epoch']
-# 'dz': 1, 'dt': 10,'Z':40, 'T':360
-training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1, 1e-3, 2e3, 1], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'linear', 'network_toggle':'RRENetwork_flux'}
+# 'dz': 1, 'dt': 10,'Z':40, 'T'
+training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1, 1e-3, 5e3, 1], 'csv_file':csv_file, 'psi_lb':-1000,'psi_ub':-12.225, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'linear', 'network_toggle':'RRENetwork_flux'}
 # training_hp = {'dz': 15, 'dt': 0.0104,'Z':65, 'T':198, 'noise':0,'lb':lb,'ub':ub, 'name':name,'lbfgs_options':lbfgs_options, 'adam_options':adam_options, 'norm':'_norm', 'weights': [1, 1, 5e2, 1], 'csv_file':csv_file, 'psi_lb':-270,'psi_ub':0, 'starting_epoch': starting_epoch, 'total_epoch':total_epoch, 'scheduleing_toggle':'constant'}
 
 test_hp = {'name':'Test1', 'dz': 0.1, 'dt': .012,'Z':100, 'T':3, 'noise':0}
